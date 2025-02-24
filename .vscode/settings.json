@@ -1,0 +1,6 @@
+{
+    "python.analysis.extraPaths": [
+        "./lctgen"
+    ],
+    "files.eol": "\n"
+}
