@@ -11,8 +11,11 @@ from PySide6.QtWidgets import QApplication, QMainWindow, QHBoxLayout, QWidget
 from .control_panel import ControlPanel
 from .map_panel import MapPanel
 
+cache_path = "~/.unified_data_cache"
+# cache_path = "../data"
+
 class MainWindow(QMainWindow):
-    def __init__(self, env_name="waymo_val"):
+    def __init__(self, cache_path="~/.unified_data_cache", env_name="waymo_val"):
         super().__init__()
         self.setWindowTitle("Trajectory Customization")
         self.setFixedSize(QSize(800, 600))
@@ -22,7 +25,7 @@ class MainWindow(QMainWindow):
         self.commands = {}
 
         # Map API Initialization
-        self.map_api = MapAPI(Path("~/.unified_data_cache").expanduser())
+        self.map_api = MapAPI(Path(cache_path).expanduser())
         self.maps = sorted([
             map_file.replace(".pb", "")
             for map_file in os.listdir(self.map_api.unified_cache_path / env_name / "maps")
@@ -43,7 +46,7 @@ class MainWindow(QMainWindow):
 if __name__ == "__main__":
     app = QApplication(sys.argv)
 
-    window = MainWindow()
+    window = MainWindow(cache_path=cache_path)
     window.show()
 
     app.exec()

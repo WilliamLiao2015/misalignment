@@ -2,7 +2,7 @@ from PySide6.QtCore import Qt, QPoint, QRectF, Signal
 from PySide6.QtGui import QPixmap, QColor, QCursor, QFont, QPalette, QPainterPath, QPen
 from PySide6.QtWidgets import QGraphicsView, QFrame, QGraphicsScene, QGraphicsPixmapItem, QGraphicsPathItem, QGraphicsItemGroup, QGraphicsTextItem
 
-SCALE_FACTOR = 1.25
+SCALE_FACTOR = 1.05
 
 class MapViewer(QGraphicsView):
     coordinatesChanged = Signal(QPoint)
@@ -50,8 +50,7 @@ class MapViewer(QGraphicsView):
                 self.scale(1 / unity.width(), 1 / unity.height())
                 viewrect = self.viewport().rect()
                 scenerect = self.transform().mapRect(rect)
-                factor = min(viewrect.width() / scenerect.width(),
-                             viewrect.height() / scenerect.height()) * scale
+                factor = min(viewrect.width() / scenerect.width(), viewrect.height() / scenerect.height()) * scale
                 self.scale(factor, factor)
                 if not self.zoomPinned():
                     self.centerOn(self._photo if self.mode == "raster" else self._scene.items()[0])
@@ -94,7 +93,7 @@ class MapViewer(QGraphicsView):
 
     def wheelEvent(self, event):
         delta = event.angleDelta().y()
-        self.zoom(delta and delta // abs(delta))
+        self.zoom(delta and delta // abs(delta) * (1 + abs(delta) // 120))
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
