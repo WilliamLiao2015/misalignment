@@ -13,12 +13,13 @@ import matplotlib.pyplot as plt
 from PIL import Image
 from pydantic import BaseModel
 from typing import List, Tuple
+from trajdata.maps import VectorMap
 
 from trafficgen.utils.typedef import *
 from lctgen.models import LCTGen
 from lctgen.config.default import get_config
 from lctgen.core.basic import BasicLLM
-from lctgen.inference.utils import output_formating_cot, map_retrival, get_map_data_batch, load_all_map_vectors
+from lctgen.inference.utils import output_formating_cot, map_retrival, load_all_map_vectors, get_map_data_batch
 from lctgen.models.utils import visualize_input_seq
 
 class AgentVector(BaseModel):
@@ -127,6 +128,76 @@ def gen_scenario_from_gpt_text(llm_text, cfg, model, map_vecs, map_ids):
     # inference with LLM-output Structured Representation
     batch["text"] = torch.tensor(agent_vector, dtype=batch["text"].dtype)[None, ...]
     batch["agent_mask"] = torch.tensor([1]*agent_num + [0]*(MAX_AGENT_NUM - agent_num), dtype=batch["agent_mask"].dtype)[None, ...]
+
+    model_output = model.forward(batch, "val")["text_decode_output"]
+    output_scene = model.process(model_output, batch, num_limit=1, with_attribute=True, pred_ego=True, pred_motion=True)
+
+    return vis_decode(batch, output_scene)
+
+def down_sampling(line, type=0):
+    SAMPLE_NUM = 10
+
+    # if is center lane
+    point_num = len(line)
+
+    ret = []
+
+    if point_num < SAMPLE_NUM or type == 1:
+        for i in range(0, point_num):
+            ret.append(line[i])
+    else:
+        for i in range(0, point_num, SAMPLE_NUM):
+            ret.append(line[i])
+
+    return ret
+
+def generate_scenario(query: str, vector_map: VectorMap):
+    cfg = get_config(os.path.join(folder, "../lctgen/lctgen/gpt/cfgs/attr_ind_motion/non_api_cot_attr_20m.yaml"))
+    llm = OpenAIModel(cfg, base_url="http://localhost:11434/v1", model="llama3.1")
+    llm_text = llm.forward(query)
+
+    cfg = get_config(os.path.join(folder, "../configs/lctgen.yaml"))
+    model = LCTGen.load_from_checkpoint(cfg.LOAD_CHECKPOINT_PATH, config=cfg, metrics=[], strict=False)
+    model.eval()
+
+    # format LLM output to Structured Representation (agent and map vectors)
+    MAX_AGENT_NUM = 32
+    agent_vector, map_vector = output_formating_cot(llm_text) if isinstance(llm_text, str) else llm_text
+
+    agent_num = len(agent_vector)
+    vector_dim = len(agent_vector[0])
+    agent_vector = agent_vector + [[-1]*vector_dim] * (MAX_AGENT_NUM - agent_num)
+
+    batch = {
+        "center": [],
+        "bound": [],
+    }
+    for lane in vector_map.lanes:
+        center = down_sampling(lane.center.xy)
+        left_edge = down_sampling(lane.left_edge.xy) if lane.left_edge is not None else None
+        right_edge = down_sampling(lane.right_edge.xy) if lane.right_edge is not None else None
+
+        for p1, p2 in zip(center[:-1], center[1:]):
+            batch["center"].append([p1[0], p1[1], p2[0], p2[1], 1, 0]) # center type is 1
+        if left_edge is not None:
+            for p1, p2 in zip(left_edge[:-1], left_edge[1:]):
+                batch["bound"].append([p1[0], p1[1], p2[0], p2[1], 15, 0]) # bound type is 15
+        if right_edge is not None:
+            for p1, p2 in zip(right_edge[:-1], right_edge[1:]):
+                batch["bound"].append([p1[0], p1[1], p2[0], p2[1], 15, 0]) # bound type is 15
+
+    batch["center"] = torch.tensor(batch["center"], dtype=torch.float32).unsqueeze(0)
+    batch["bound"] = torch.tensor(batch["bound"], dtype=torch.float32).unsqueeze(0)
+    batch["center_mask"] = torch.ones(batch["center"].shape[:-1], dtype=torch.bool)
+    batch["bound_mask"] = torch.ones(batch["bound"].shape[:-1], dtype=torch.bool)
+    batch["lane_inp"] = torch.cat([batch["center"], batch["bound"]], dim=1)
+    batch["lane_mask"] = torch.cat([batch["center_mask"], batch["bound_mask"]], dim=1)
+
+    print(batch["lane_inp"].shape, batch["lane_mask"].shape)
+
+    # inference with LLM-output Structured Representation
+    batch["text"] = torch.tensor(agent_vector, dtype=torch.int)[None, ...]
+    batch["agent_mask"] = torch.tensor([1]*agent_num + [0]*(MAX_AGENT_NUM - agent_num), dtype=torch.bool)[None, ...]
 
     model_output = model.forward(batch, "val")["text_decode_output"]
     output_scene = model.process(model_output, batch, num_limit=1, with_attribute=True, pred_ego=True, pred_motion=True)

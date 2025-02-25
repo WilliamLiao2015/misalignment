@@ -10,4 +10,4 @@ echo "Current directory: $(pwd)"
 
 # Execute the Command
 export PYTHONPATH=$(pwd)
-python -m models.lctgen
+python -m methods.lctgen
