@@ -15,13 +15,18 @@ cache_path = "~/.unified_data_cache"
 # cache_path = "../data"
 
 class MainWindow(QMainWindow):
-    def __init__(self, cache_path="~/.unified_data_cache", env_name="waymo_val"):
+    def __init__(self, cache_path="~/.unified_data_cache", env_name="waymo_val", methods=["lctgen"]):
         super().__init__()
         self.setWindowTitle("Trajectory Customization")
         self.setFixedSize(QSize(800, 600))
 
         # Environment Configuration
         self.env_name = env_name
+        self.methods = methods
+
+        self.method_name = methods[0]
+        self.vector_map = None
+        self.query = None
         self.commands = {}
 
         # Map API Initialization

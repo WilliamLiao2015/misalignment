@@ -55,6 +55,7 @@ class MapPanel(QWidget):
 
         self.vector_map: VectorMap = self.window.map_api.get_map(f"{self.window.env_name}:{map_name}")
         self.vector_map = flatten_map(self.vector_map)
+        self.window.vector_map = self.vector_map
 
         if self.mode == "raster":
             self.image = self.vector_map.rasterize(resolution=10, incl_lane_area=False)

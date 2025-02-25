@@ -204,3 +204,13 @@ class MapViewer(QGraphicsView):
         # self._empty = False
         # self.setDragMode(QGraphicsView.DragMode.ScrollHandDrag)
         # self.resetView(SCALE_FACTOR ** self._zoom)
+
+    def drawTrajectory(self, trajectory, color=(255, 0, 0, 255)):
+        path = QPainterPath()
+        path.moveTo(trajectory[0][0], trajectory[0][1])
+        for point in trajectory[1:]:
+            path.lineTo(point[0], point[1])
+
+        path_item = QGraphicsPathItem(path)
+        path_item.setPen(QPen(QColor(*color), 0.5, c=Qt.PenCapStyle.RoundCap, j=Qt.PenJoinStyle.RoundJoin))
+        self.interactive_overlay.addToGroup(path_item)
