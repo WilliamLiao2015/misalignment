@@ -151,7 +151,7 @@ def down_sampling(line, type=0):
 
     return ret
 
-def generate_scenario(query: str, vector_map: VectorMap):
+def generate_scenario(query: str, vector_map: VectorMap, log=True):
     cfg = get_config(os.path.join(folder, "../lctgen/lctgen/gpt/cfgs/attr_ind_motion/non_api_cot_attr_20m.yaml"))
     llm = OpenAIModel(cfg, base_url="http://localhost:11434/v1", model="llama3.1")
     llm_text = llm.forward(query)
@@ -164,6 +164,8 @@ def generate_scenario(query: str, vector_map: VectorMap):
     MAX_AGENT_NUM = 32
     agent_vector, map_vector = output_formating_cot(llm_text) if isinstance(llm_text, str) else llm_text
 
+    if log: print(agent_vector)
+
     agent_num = len(agent_vector)
     vector_dim = len(agent_vector[0])
     agent_vector = agent_vector + [[-1]*vector_dim] * (MAX_AGENT_NUM - agent_num)
@@ -171,7 +173,9 @@ def generate_scenario(query: str, vector_map: VectorMap):
     batch = {
         "center": [],
         "bound": [],
+        "rest": torch.empty(0).unsqueeze(0),
     }
+
     for lane in vector_map.lanes:
         center = down_sampling(lane.center.xy)
         left_edge = down_sampling(lane.left_edge.xy) if lane.left_edge is not None else None
@@ -193,16 +197,18 @@ def generate_scenario(query: str, vector_map: VectorMap):
     batch["lane_inp"] = torch.cat([batch["center"], batch["bound"]], dim=1)
     batch["lane_mask"] = torch.cat([batch["center_mask"], batch["bound_mask"]], dim=1)
 
-    print(batch["lane_inp"].shape, batch["lane_mask"].shape)
-
     # inference with LLM-output Structured Representation
-    batch["text"] = torch.tensor(agent_vector, dtype=torch.int)[None, ...]
-    batch["agent_mask"] = torch.tensor([1]*agent_num + [0]*(MAX_AGENT_NUM - agent_num), dtype=torch.bool)[None, ...]
+    batch["text"] = torch.tensor(agent_vector, dtype=torch.float32).unsqueeze(0)
+    batch["agent"] = torch.tensor(agent_vector, dtype=torch.float32).unsqueeze(0)
+    batch["agent_mask"] = torch.tensor([1]*agent_num + [0]*(MAX_AGENT_NUM - agent_num), dtype=torch.bool).unsqueeze(0)
+    batch["file"] = torch.tensor([0], dtype=torch.int64).unsqueeze(0)
+    batch["center_id"] = torch.tensor([0], dtype=torch.int64).unsqueeze(0)
+    batch["agent_vec_index"] = torch.tensor([0], dtype=torch.int64).unsqueeze(0)
 
-    model_output = model.forward(batch, "val")["text_decode_output"]
+    model_output = model.trafficgen_model(batch)
     output_scene = model.process(model_output, batch, num_limit=1, with_attribute=True, pred_ego=True, pred_motion=True)
 
-    return vis_decode(batch, output_scene)
+    return output_scene[0]
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Generate scenarios.")
