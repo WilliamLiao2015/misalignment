@@ -67,7 +67,6 @@ if __name__ == "__main__":
 
     try:
         returncode, stdout, stderr = evaluate_method("lctgen", config)
-        print(stderr.decode("utf-8"))
         trajectories = np.asarray(eval(stdout.decode("utf-8")))
         print(trajectories)
     except Exception as e:
