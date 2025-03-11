@@ -190,4 +190,4 @@ if __name__ == "__main__":
 
     scene = gen_scenario_from_gpt_text(llm_text, cfg, model, map_vecs, map_ids, save_image=args.save_image)
 
-    print(scene["traj"].tolist())
+    print(scene["traj"].swapaxes(0, 1).tolist())
