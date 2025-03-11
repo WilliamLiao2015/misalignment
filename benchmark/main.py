@@ -18,7 +18,7 @@ type_map = {
     "longitudinal:driving-forward:reverse": "Reversing",
     "lateral:going-straight": "Going Straight",
     "lateral:turning:right": "Turning Right",
-    "lateral:turning-left": "Turning Left"
+    "lateral:turning:left": "Turning Left"
 }
 
 def get_config(path: str) -> dict:
