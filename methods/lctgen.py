@@ -1,5 +1,6 @@
 import argparse
 import os
+import re
 import sys
 
 folder = os.path.dirname(__file__)
@@ -7,20 +8,33 @@ sys.path.append(os.path.join(folder, "../lctgen"))
 
 import openai
 import torch
-import numpy as np
-import matplotlib.pyplot as plt
-
 from PIL import Image
 from pydantic import BaseModel
 from typing import List, Tuple
-from trajdata.maps import VectorMap
 
-from trafficgen.utils.typedef import *
-from lctgen.models import LCTGen
-from lctgen.config.default import get_config
-from lctgen.core.basic import BasicLLM
-from lctgen.inference.utils import output_formating_cot, map_retrival, load_all_map_vectors, get_map_data_batch
-from lctgen.models.utils import visualize_input_seq
+try:
+    from dotenv import load_dotenv
+    load_dotenv(".env.local")
+except ImportError:
+    pass
+
+# copied from https://stackoverflow.com/a/45669280/16082247
+class HiddenPrints:
+    def __enter__(self):
+        self._original_stdout = sys.stdout
+        sys.stdout = open(os.devnull, 'w')
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        sys.stdout.close()
+        sys.stdout = self._original_stdout
+
+with HiddenPrints():
+    from trafficgen.utils.typedef import *
+    from lctgen.models import LCTGen
+    from lctgen.config.default import get_config
+    from lctgen.core.basic import BasicLLM
+    from lctgen.inference.utils import output_formating_cot, map_retrival, load_all_map_vectors, get_map_data_batch
+    from lctgen.models.utils import visualize_input_seq
 
 class AgentVector(BaseModel):
     position_negative_for_ego: int
@@ -40,13 +54,13 @@ class LCTGenStructuredRepresentation(BaseModel):
     map: MapVector
 
 class OpenAIModel(BasicLLM):
-    def __init__(self, config, base_url=None, model="gpt-4o-mini"):
+    def __init__(self, config, base_url=None, api_key=None, model="gpt-4o-mini"):
         super().__init__(config)
 
         self.base_url = base_url
         self.model = model
 
-        self.client = openai.Client(base_url=base_url, api_key="ollama" if base_url is not None else None)
+        self.client = openai.Client(base_url=base_url, api_key=api_key)
 
         self.codex_cfg = config.LLM.CODEX
         folder = os.path.join(os.path.dirname(__file__), "../lctgen/lctgen/gpt")
@@ -80,7 +94,18 @@ class OpenAIModel(BasicLLM):
                 frequency_penalty=0,
                 presence_penalty=0,
             )
-            resp = responses["choices"][0]["message"]["content"]
+            resp = responses.choices[0].message.content
+        # elif self.model.startswith("qwq-"):
+        #     responses = self.client.chat.completions.create(
+        #         model=self.model,
+        #         messages=[
+        #             {"role": "system", "content": self.sys_prompt},
+        #             {"role": "user", "content": extended_prompt}
+        #         ],
+        #         max_tokens=-1
+        #     )
+        #     resp = responses.choices[0].message.content
+        #     resp = re.sub(r"<think>.*</think>", "", resp)
         else:
             responses = self.client.beta.chat.completions.parse(
                 model=self.model,
@@ -88,11 +113,7 @@ class OpenAIModel(BasicLLM):
                     {"role": "system", "content": self.sys_prompt},
                     {"role": "user", "content": extended_prompt}
                 ],
-                temperature=self.codex_cfg.TEMPERATURE,
                 max_tokens=-1,
-                top_p = 1.,
-                frequency_penalty=0,
-                presence_penalty=0,
                 response_format=LCTGenStructuredRepresentation
             )
             representation = responses.choices[0].message.parsed
@@ -109,10 +130,12 @@ def vis_decode(batch, ae_output):
     img = visualize_input_seq(batch, agents=ae_output[0]["agent"], traj=ae_output[0]["traj"])
     return Image.fromarray(img)
 
-def gen_scenario_from_gpt_text(llm_text, cfg, model, map_vecs, map_ids):
+def gen_scenario_from_gpt_text(llm_text, cfg, model, map_vecs, map_ids, save_image=False):
     # format LLM output to Structured Representation (agent and map vectors)
     MAX_AGENT_NUM = 32
-    agent_vector, map_vector = output_formating_cot(llm_text) if isinstance(llm_text, str) else llm_text
+
+    with HiddenPrints():
+        agent_vector, map_vector = output_formating_cot(llm_text) if isinstance(llm_text, str) else llm_text
 
     agent_num = len(agent_vector)
     vector_dim = len(agent_vector[0])
@@ -132,96 +155,33 @@ def gen_scenario_from_gpt_text(llm_text, cfg, model, map_vecs, map_ids):
     model_output = model.forward(batch, "val")["text_decode_output"]
     output_scene = model.process(model_output, batch, num_limit=1, with_attribute=True, pred_ego=True, pred_motion=True)
 
-    return vis_decode(batch, output_scene)
+    if save_image:
+        image = vis_decode(batch, output_scene)
 
-def down_sampling(line, type=0):
-    SAMPLE_NUM = 10
-
-    # if is center lane
-    point_num = len(line)
-
-    ret = []
-
-    if point_num < SAMPLE_NUM or type == 1:
-        for i in range(0, point_num):
-            ret.append(line[i])
-    else:
-        for i in range(0, point_num, SAMPLE_NUM):
-            ret.append(line[i])
-
-    return ret
-
-def generate_scenario(query: str, vector_map: VectorMap, log=True):
-    cfg = get_config(os.path.join(folder, "../lctgen/lctgen/gpt/cfgs/attr_ind_motion/non_api_cot_attr_20m.yaml"))
-    llm = OpenAIModel(cfg, base_url="http://localhost:11434/v1", model="llama3.1")
-    llm_text = llm.forward(query)
-
-    cfg = get_config(os.path.join(folder, "../configs/lctgen.yaml"))
-    model = LCTGen.load_from_checkpoint(cfg.LOAD_CHECKPOINT_PATH, config=cfg, metrics=[], strict=False)
-    model.eval()
-
-    # format LLM output to Structured Representation (agent and map vectors)
-    MAX_AGENT_NUM = 32
-    agent_vector, map_vector = output_formating_cot(llm_text) if isinstance(llm_text, str) else llm_text
-
-    if log: print(agent_vector)
-
-    agent_num = len(agent_vector)
-    vector_dim = len(agent_vector[0])
-    agent_vector = agent_vector + [[-1]*vector_dim] * (MAX_AGENT_NUM - agent_num)
-
-    batch = {
-        "center": [],
-        "bound": [],
-        "rest": torch.empty(0).unsqueeze(0),
-    }
-
-    for lane in vector_map.lanes:
-        center = down_sampling(lane.center.xy)
-        left_edge = down_sampling(lane.left_edge.xy) if lane.left_edge is not None else None
-        right_edge = down_sampling(lane.right_edge.xy) if lane.right_edge is not None else None
-
-        for p1, p2 in zip(center[:-1], center[1:]):
-            batch["center"].append([p1[0], p1[1], p2[0], p2[1], 1, 0]) # center type is 1
-        if left_edge is not None:
-            for p1, p2 in zip(left_edge[:-1], left_edge[1:]):
-                batch["bound"].append([p1[0], p1[1], p2[0], p2[1], 15, 0]) # bound type is 15
-        if right_edge is not None:
-            for p1, p2 in zip(right_edge[:-1], right_edge[1:]):
-                batch["bound"].append([p1[0], p1[1], p2[0], p2[1], 15, 0]) # bound type is 15
-
-    batch["center"] = torch.tensor(batch["center"], dtype=torch.float32).unsqueeze(0)
-    batch["bound"] = torch.tensor(batch["bound"], dtype=torch.float32).unsqueeze(0)
-    batch["center_mask"] = torch.ones(batch["center"].shape[:-1], dtype=torch.bool)
-    batch["bound_mask"] = torch.ones(batch["bound"].shape[:-1], dtype=torch.bool)
-    batch["lane_inp"] = torch.cat([batch["center"], batch["bound"]], dim=1)
-    batch["lane_mask"] = torch.cat([batch["center_mask"], batch["bound_mask"]], dim=1)
-
-    # inference with LLM-output Structured Representation
-    batch["text"] = torch.tensor(agent_vector, dtype=torch.float32).unsqueeze(0)
-    batch["agent"] = torch.tensor(agent_vector, dtype=torch.float32).unsqueeze(0)
-    batch["agent_mask"] = torch.tensor([1]*agent_num + [0]*(MAX_AGENT_NUM - agent_num), dtype=torch.bool).unsqueeze(0)
-    batch["file"] = torch.tensor([0], dtype=torch.int64).unsqueeze(0)
-    batch["center_id"] = torch.tensor([0], dtype=torch.int64).unsqueeze(0)
-    batch["agent_vec_index"] = torch.tensor([0], dtype=torch.int64).unsqueeze(0)
-
-    model_output = model.trafficgen_model(batch)
-    output_scene = model.process(model_output, batch, num_limit=1, with_attribute=True, pred_ego=True, pred_motion=True)
+        with open(os.path.join(os.path.dirname(__file__), "..", "data/scene.png"), "wb") as fp:
+            image.save(fp)
 
     return output_scene[0]
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Generate scenarios.")
-    parser.add_argument("--map", type=str, help="Map file.")
-    parser.add_argument("--config", type=str, help="Configuration file.")
-    parser.add_argument("--output-dir", type=str, help="Output directory.")
-
+    parser = argparse.ArgumentParser(description="Generate a scenario from the given text.")
+    parser.add_argument("--text", type=str, help="The text to generate the scenario from.", default="V2 is striking V1 from behind. V1 is going straight and cruising slowly, V2 is going straight and accelerating. Two vehicles, on a highway.")
+    parser.add_argument("--save_image", action="store_true", help="Save the generated image.")
+    parser.add_argument("--llm_base_url", type=str, help="The base URL for the LLM API.")
+    parser.add_argument("--llm_model", type=str, help="The model to use for the LLM API.")
+    parser.add_argument("--llm_api_key", type=str, help="The API key for the LLM API.")
     args = parser.parse_args()
 
+    try:
+        os.environ["LLM_BASE_URL"] = args.llm_base_url
+        os.environ["LLM_MODEL"] = args.llm_model
+        os.environ["LLM_API_KEY"] = args.llm_api_key
+    except:
+        pass
+
     cfg = get_config(os.path.join(folder, "../lctgen/lctgen/gpt/cfgs/attr_ind_motion/non_api_cot_attr_20m.yaml"))
-    llm = OpenAIModel(cfg, base_url="http://localhost:11434/v1", model="llama3.1")
-    llm_text = llm.forward("V2 is striking V1 from behind. V1 is going straight and cruising slowly, V2 is going straight and accelerating. Two vehicles, on a highway.")
-    print(llm_text)
+    llm = OpenAIModel(cfg, base_url=os.environ.get("LLM_BASE_URL"), api_key=os.environ.get("LLM_API_KEY"), model=os.environ.get("LLM_MODEL"))
+    llm_text = llm.forward(args.text)
 
     cfg = get_config(os.path.join(folder, "../configs/lctgen.yaml"))
     model = LCTGen.load_from_checkpoint(cfg.LOAD_CHECKPOINT_PATH, config=cfg, metrics=[], strict=False)
@@ -230,7 +190,6 @@ if __name__ == "__main__":
     map_data_file = os.path.join(folder, "../lctgen/data/demo/waymo/demo_map_vec.npy")
     map_vecs, map_ids = load_all_map_vectors(map_data_file)
 
-    scene = gen_scenario_from_gpt_text(llm_text, cfg, model, map_vecs, map_ids)
-    plt.switch_backend("TkAgg")
-    plt.imshow(scene)
-    plt.show()
+    scene = gen_scenario_from_gpt_text(llm_text, cfg, model, map_vecs, map_ids, save_image=args.save_image)
+
+    print(scene["traj"].swapaxes(0, 1).tolist())

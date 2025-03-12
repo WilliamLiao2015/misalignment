@@ -1,44 +1,51 @@
 import argparse
 import unittest
-import json
+
+import numpy as np
+
+from benchmark.main import evaluate_method, get_config
 
 from tests.test_longitudinal import TestLongitudinal
+from tests.test_lateral import TestLateral
 
-def add_tests(suite, scenario):
-    for i, activities in enumerate(scenario["activities"]):
-        for activity in activities:
-            action = activity["action"]
-            start, end = activity["interval"]
-            test = None
+test_generator_map = {
+    "longitudinal:driving-forward:accelerating": lambda: TestLongitudinal("test_accelerating"),
+    "longitudinal:driving-forward:cruising": lambda: TestLongitudinal("test_cruising"),
+    "longitudinal:driving-forward:decelerating": lambda: TestLongitudinal("test_decelerating"),
+    "longitudinal:standing-still": lambda: TestLongitudinal("test_standing_still"),
+    "lateral:going-straight": lambda: TestLateral("test_going_straight"),
+    "lateral:turning:right": lambda: TestLateral("test_turning_right"),
+    "lateral:turning:left": lambda: TestLateral("test_turning_left")
+}
 
-            test_scenario = {
-                "map_id": scenario["mapId"],
-                "trajectory": scenario["trajectories"][i][start:end - 1],
-                "activity": activity
-            }
+def add_tests(suite, config: dict, trajectories: np.ndarray):
+    for activity in config["activities"]:
+        indices = [int(participant[1:]) - 1 for participant in activity["participants"]] # remove the "V" prefix and subtract 1
 
-            if action == "driving-forward:cruising":
-                test = TestLongitudinal("test_cruising")
-            elif action == "driving-forward:accelerating":
-                test = TestLongitudinal("test_accelerating")
-            elif action == "driving-forward:decelerating":
-                test = TestLongitudinal("test_decelerating")
+        action = activity["type"]
+        start, end = activity["interval"] if "interval" in activity else (0, len(trajectories[0]))
+        test = None
 
-            if test:
-                test.set_scenario(test_scenario)
-                suite.addTest(test)
+        if action not in test_generator_map: continue
+
+        test = test_generator_map[action]()
+        test.set_trajectory(trajectories[indices][start:end])
+        suite.addTest(test)
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Run tests.")
-    parser.add_argument("--scenario-path", type=str, help="Scenario to test.")
+    parser = argparse.ArgumentParser(description="Run the tests for the generated scenarios.")
+    parser.add_argument("--config", type=str, help="The path to the configuration file.", default="benchmark/configs/turning-right.yaml")
     args = parser.parse_args()
 
-    print(f"Testing scenario: {args.scenario_path}")
+    config = get_config(args.config)
 
-    with open(args.scenario_path, "r") as fp:
-        scenario = json.load(fp)
+    try:
+        returncode, stdout, stderr = evaluate_method("lctgen", config)
+        trajectories = np.asarray(eval(stdout.decode("utf-8")))
 
-    suite = unittest.TestSuite()
-    add_tests(suite, scenario)
-    runner = unittest.TextTestRunner(verbosity=2)
-    runner.run(suite)
+        suite = unittest.TestSuite()
+        add_tests(suite, config, trajectories)
+        runner = unittest.TextTestRunner(verbosity=2)
+        runner.run(suite)
+    except Exception as e:
+        raise e

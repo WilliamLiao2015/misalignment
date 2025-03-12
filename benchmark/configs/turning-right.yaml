@@ -1,0 +1,13 @@
+activities:
+  - type: longitudinal:driving-forward:accelerating
+    participants:
+      - V1
+  - type: lateral:turning:right
+    participants:
+      - V1
+  - type: longitudinal:driving-forward:cruising
+    participants:
+      - V2
+  - type: lateral:going-straight
+    participants:
+      - V2
