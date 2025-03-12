@@ -14,11 +14,10 @@ type_map = {
     "longitudinal:driving-forward:accelerating": "Accelerating",
     "longitudinal:driving-forward:cruising": "Cruising",
     "longitudinal:driving-forward:decelerating": "Decelerating",
-    "longitudinal:driving-forward:standing-still": "Standing Still",
-    "longitudinal:driving-forward:reverse": "Reversing",
+    "longitudinal:standing-still": "Standing Still",
     "lateral:going-straight": "Going Straight",
     "lateral:turning:right": "Turning Right",
-    "lateral:turning-left": "Turning Left"
+    "lateral:turning:left": "Turning Left"
 }
 
 def get_config(path: str) -> dict:
@@ -67,7 +66,6 @@ if __name__ == "__main__":
 
     try:
         returncode, stdout, stderr = evaluate_method("lctgen", config)
-        print(stderr.decode("utf-8"))
         trajectories = np.asarray(eval(stdout.decode("utf-8")))
         print(trajectories)
     except Exception as e:

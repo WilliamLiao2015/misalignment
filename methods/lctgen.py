@@ -54,13 +54,13 @@ class LCTGenStructuredRepresentation(BaseModel):
     map: MapVector
 
 class OpenAIModel(BasicLLM):
-    def __init__(self, config, base_url=None, model="gpt-4o-mini"):
+    def __init__(self, config, base_url=None, api_key=None, model="gpt-4o-mini"):
         super().__init__(config)
 
         self.base_url = base_url
         self.model = model
 
-        self.client = openai.Client(base_url=base_url, api_key="ollama" if base_url is not None else None)
+        self.client = openai.Client(base_url=base_url, api_key=api_key)
 
         self.codex_cfg = config.LLM.CODEX
         folder = os.path.join(os.path.dirname(__file__), "../lctgen/lctgen/gpt")
@@ -169,16 +169,18 @@ if __name__ == "__main__":
     parser.add_argument("--save_image", action="store_true", help="Save the generated image.")
     parser.add_argument("--llm_base_url", type=str, help="The base URL for the LLM API.")
     parser.add_argument("--llm_model", type=str, help="The model to use for the LLM API.")
+    parser.add_argument("--llm_api_key", type=str, help="The API key for the LLM API.")
     args = parser.parse_args()
 
     try:
         os.environ["LLM_BASE_URL"] = args.llm_base_url
         os.environ["LLM_MODEL"] = args.llm_model
+        os.environ["LLM_API_KEY"] = args.llm_api_key
     except:
         pass
 
     cfg = get_config(os.path.join(folder, "../lctgen/lctgen/gpt/cfgs/attr_ind_motion/non_api_cot_attr_20m.yaml"))
-    llm = OpenAIModel(cfg, base_url=os.environ.get("LLM_BASE_URL"), model=os.environ.get("LLM_MODEL"))
+    llm = OpenAIModel(cfg, base_url=os.environ.get("LLM_BASE_URL"), api_key=os.environ.get("LLM_API_KEY"), model=os.environ.get("LLM_MODEL"))
     llm_text = llm.forward(args.text)
 
     cfg = get_config(os.path.join(folder, "../configs/lctgen.yaml"))
@@ -190,4 +192,4 @@ if __name__ == "__main__":
 
     scene = gen_scenario_from_gpt_text(llm_text, cfg, model, map_vecs, map_ids, save_image=args.save_image)
 
-    print(scene["traj"].tolist())
+    print(scene["traj"].swapaxes(0, 1).tolist())
