@@ -1,3 +1,4 @@
+import argparse
 import unittest
 
 import numpy as np
@@ -8,11 +9,10 @@ from tests.test_longitudinal import TestLongitudinal
 from tests.test_lateral import TestLateral
 
 test_generator_map = {
-    "longitudinal:driving-forward:accelerating": lambda: TestLongitudinal("test_cruising"),
-    "longitudinal:driving-forward:cruising": lambda: TestLongitudinal("test_accelerating"),
+    "longitudinal:driving-forward:accelerating": lambda: TestLongitudinal("test_accelerating"),
+    "longitudinal:driving-forward:cruising": lambda: TestLongitudinal("test_cruising"),
     "longitudinal:driving-forward:decelerating": lambda: TestLongitudinal("test_decelerating"),
-    "longitudinal:driving-forward:standing-still": lambda: TestLongitudinal("test_standing_still"),
-    "longitudinal:driving-forward:reverse": lambda: TestLongitudinal("test_reversing"),
+    "longitudinal:standing-still": lambda: TestLongitudinal("test_standing_still"),
     "lateral:going-straight": lambda: TestLateral("test_going_straight"),
     "lateral:turning:right": lambda: TestLateral("test_turning_right"),
     "lateral:turning:left": lambda: TestLateral("test_turning_left")
@@ -29,17 +29,19 @@ def add_tests(suite, config: dict, trajectories: np.ndarray):
         if action not in test_generator_map: continue
 
         test = test_generator_map[action]()
-        test.set_trajectory(trajectories[indices, start:end])
+        test.set_trajectory(trajectories[indices][start:end])
         suite.addTest(test)
 
 if __name__ == "__main__":
-    config = get_config("benchmark/configs/turning-right.yaml")
+    parser = argparse.ArgumentParser(description="Run the tests for the generated scenarios.")
+    parser.add_argument("--config", type=str, help="The path to the configuration file.", default="benchmark/configs/turning-right.yaml")
+    args = parser.parse_args()
+
+    config = get_config(args.config)
 
     try:
         returncode, stdout, stderr = evaluate_method("lctgen", config)
         trajectories = np.asarray(eval(stdout.decode("utf-8")))
-
-        print(trajectories.shape)
 
         suite = unittest.TestSuite()
         add_tests(suite, config, trajectories)
