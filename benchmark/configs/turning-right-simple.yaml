@@ -1,0 +1,4 @@
+activities:
+  - type: lateral:turning:right
+    participants:
+      - V1
