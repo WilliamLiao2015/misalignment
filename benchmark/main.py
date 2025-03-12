@@ -14,8 +14,7 @@ type_map = {
     "longitudinal:driving-forward:accelerating": "Accelerating",
     "longitudinal:driving-forward:cruising": "Cruising",
     "longitudinal:driving-forward:decelerating": "Decelerating",
-    "longitudinal:driving-forward:standing-still": "Standing Still",
-    "longitudinal:driving-forward:reverse": "Reversing",
+    "longitudinal:standing-still": "Standing Still",
     "lateral:going-straight": "Going Straight",
     "lateral:turning:right": "Turning Right",
     "lateral:turning:left": "Turning Left"
