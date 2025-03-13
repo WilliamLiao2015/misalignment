@@ -87,7 +87,7 @@ def evaluate_method(method: str, config: dict) -> float:
         text_indices = set([str(int(participant[1:]) - 1) for activity in config["activities"] for participant in activity["participants"]])
 
         description = describe_for_prosim(config)
-        print(f"Running scenario generation based on text: \"{description}\"")
+        print(f"Running scenario generation based on text: \"{description}\", with text indices: {text_indices}")
         command = f"conda run -n {conda_env} python {script_path} --text '{description}' --text_indices {' '.join(text_indices)} --example_index {example_index} --save_image"
     else:
         raise ValueError(f"Method {method} not recognized.")
