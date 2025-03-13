@@ -8,16 +8,19 @@ epsilon_acceleration = 0.05
 class TestLongitudinal(TestBase):
     def test_decelerating(self):
         deltas = np.linalg.norm(np.diff(self.trajectory[0], axis=0), axis=1)
-        self.assertTrue(np.all(deltas[1:] - deltas[0] < epsilon_acceleration))
+        diffs = deltas[1:] - deltas[0]
+        self.assertTrue(np.all(diffs < epsilon_acceleration), f"Invalid differences: {diffs[diffs >= epsilon_acceleration]}")
 
     def test_cruising(self):
         deltas = np.linalg.norm(np.diff(self.trajectory[0], axis=0), axis=1)
-        self.assertTrue(np.all(np.abs(deltas[1:] - deltas[0]) < epsilon_acceleration))
+        diffs = deltas[1:] - deltas[0]
+        self.assertTrue(np.all(np.abs(diffs) < epsilon_acceleration), f"Invalid differences: {diffs[np.abs(diffs) >= epsilon_acceleration]}")
 
     def test_accelerating(self):
         deltas = np.linalg.norm(np.diff(self.trajectory[0], axis=0), axis=1)
-        self.assertTrue(np.all(deltas[1:] - deltas[0] > -epsilon_acceleration))
+        diffs = deltas[1:] - deltas[0]
+        self.assertTrue(np.all(diffs > -epsilon_acceleration), f"Invalid differences: {diffs[diffs <= -epsilon_acceleration]}")
 
     def test_standing_still(self):
         deltas = np.linalg.norm(np.diff(self.trajectory[0], axis=0), axis=1)
-        self.assertTrue(np.all(deltas < epsilon_speed))
+        self.assertTrue(np.all(deltas < epsilon_speed), f"Invalid deltas: {deltas[deltas >= epsilon_speed]}")
