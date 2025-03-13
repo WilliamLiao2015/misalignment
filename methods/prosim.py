@@ -123,7 +123,26 @@ def text_control(batch, text_input, text_idxs):
 
     return batch, controlled_agent_names
 
+def visualize(example_idx: int):
+    sample_data_index = [all_data_index[example_idx]]
+    dataset._data_index = sample_data_index
+    dataset._data_len = len(sample_data_index)
+
+    dataloader = DataLoader(dataset, batch_size=1, shuffle=False, collate_fn=dataset.get_collate_fn(), num_workers=0)
+
+    for batch in dataloader: break
+
+    vec_map = batch.vector_maps[0]
+    center_in_world_xyzh = batch.centered_agent_state.as_format('x,y,z,h').cpu().numpy()[0]
+    vis_vecs = extract_lane_vecs(vec_map, center_in_world_xyzh, 150)
+
+    plot_demo_fig(batch, controlled_names=[], vis_vecs=vis_vecs, output=None, show_all_name=True, show_gt=True)
+
 if __name__ == "__main__":
-    config = get_config('cfg/waymo_demo.yaml', cluster='local')
+    config = get_config(os.path.join(folder, '../ProSim/prosim_demo/cfg/waymo_demo.yaml'), cluster='local')
     dataset = registry.get_dataset("prosim_imitation")(config, 'train')
     all_data_index = dataset._data_index
+
+    import matplotlib.pyplot as plt
+    visualize(5)
+    plt.show()
