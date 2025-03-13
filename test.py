@@ -35,12 +35,13 @@ def add_tests(suite, config: dict, trajectories: np.ndarray):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run the tests for the generated scenarios.")
     parser.add_argument("--config", type=str, help="The path to the configuration file.", default="benchmark/configs/turning-right.yaml")
+    parser.add_argument("--method", type=str, help="The method to evaluate.", default="lctgen")
     args = parser.parse_args()
 
     config = get_config(args.config)
 
     try:
-        returncode, stdout, stderr = evaluate_method("lctgen", config)
+        returncode, stdout, stderr = evaluate_method(args.method, config)
         trajectories = np.asarray(eval(stdout.decode("utf-8")))
 
         suite = unittest.TestSuite()
