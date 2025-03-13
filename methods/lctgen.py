@@ -158,7 +158,7 @@ def gen_scenario_from_gpt_text(llm_text, cfg, model, map_vecs, map_ids, save_ima
     if save_image:
         image = vis_decode(batch, output_scene)
 
-        with open(os.path.join(os.path.dirname(__file__), "..", "data/scene.png"), "wb") as fp:
+        with open(os.path.join(os.path.dirname(__file__), "..", "data/lctgen-scenario.png"), "wb") as fp:
             image.save(fp)
 
     return output_scene[0]
