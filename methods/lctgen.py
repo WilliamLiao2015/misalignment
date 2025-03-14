@@ -134,8 +134,7 @@ def gen_scenario_from_gpt_text(llm_text, cfg, model, map_vecs, map_ids, save_ima
     # format LLM output to Structured Representation (agent and map vectors)
     MAX_AGENT_NUM = 32
 
-    with HiddenPrints():
-        agent_vector, map_vector = output_formating_cot(llm_text) if isinstance(llm_text, str) else llm_text
+    agent_vector, map_vector = output_formating_cot(llm_text) if isinstance(llm_text, str) else llm_text
 
     agent_num = len(agent_vector)
     vector_dim = len(agent_vector[0])
@@ -164,32 +163,33 @@ def gen_scenario_from_gpt_text(llm_text, cfg, model, map_vecs, map_ids, save_ima
     return output_scene[0]
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Generate a scenario from the given text.")
-    parser.add_argument("--text", type=str, help="The text to generate the scenario from.", default="V2 is striking V1 from behind. V1 is going straight and cruising slowly, V2 is going straight and accelerating. Two vehicles, on a highway.")
-    parser.add_argument("--save_image", action="store_true", help="Save the generated image.")
-    parser.add_argument("--llm_base_url", type=str, help="The base URL for the LLM API.")
-    parser.add_argument("--llm_model", type=str, help="The model to use for the LLM API.")
-    parser.add_argument("--llm_api_key", type=str, help="The API key for the LLM API.")
-    args = parser.parse_args()
+    with HiddenPrints():
+        parser = argparse.ArgumentParser(description="Generate a scenario from the given text.")
+        parser.add_argument("--text", type=str, help="The text to generate the scenario from.", default="V2 is striking V1 from behind. V1 is going straight and cruising slowly, V2 is going straight and accelerating. Two vehicles, on a highway.")
+        parser.add_argument("--save_image", action="store_true", help="Save the generated image.")
+        parser.add_argument("--llm_base_url", type=str, help="The base URL for the LLM API.")
+        parser.add_argument("--llm_model", type=str, help="The model to use for the LLM API.")
+        parser.add_argument("--llm_api_key", type=str, help="The API key for the LLM API.")
+        args = parser.parse_args()
 
-    try:
-        os.environ["LLM_BASE_URL"] = args.llm_base_url
-        os.environ["LLM_MODEL"] = args.llm_model
-        os.environ["LLM_API_KEY"] = args.llm_api_key
-    except:
-        pass
+        try:
+            os.environ["LLM_BASE_URL"] = args.llm_base_url
+            os.environ["LLM_MODEL"] = args.llm_model
+            os.environ["LLM_API_KEY"] = args.llm_api_key
+        except:
+            pass
 
-    cfg = get_config(os.path.join(folder, "../lctgen/lctgen/gpt/cfgs/attr_ind_motion/non_api_cot_attr_20m.yaml"))
-    llm = OpenAIModel(cfg, base_url=os.environ.get("LLM_BASE_URL"), api_key=os.environ.get("LLM_API_KEY"), model=os.environ.get("LLM_MODEL"))
-    llm_text = llm.forward(args.text)
+        cfg = get_config(os.path.join(folder, "../lctgen/lctgen/gpt/cfgs/attr_ind_motion/non_api_cot_attr_20m.yaml"))
+        llm = OpenAIModel(cfg, base_url=os.environ.get("LLM_BASE_URL"), api_key=os.environ.get("LLM_API_KEY"), model=os.environ.get("LLM_MODEL"))
+        llm_text = llm.forward(args.text)
 
-    cfg = get_config(os.path.join(folder, "../configs/lctgen.yaml"))
-    model = LCTGen.load_from_checkpoint(cfg.LOAD_CHECKPOINT_PATH, config=cfg, metrics=[], strict=False)
-    model.eval()
+        cfg = get_config(os.path.join(folder, "../configs/lctgen.yaml"))
+        model = LCTGen.load_from_checkpoint(cfg.LOAD_CHECKPOINT_PATH, config=cfg, metrics=[], strict=False)
+        model.eval()
 
-    map_data_file = os.path.join(folder, "../lctgen/data/demo/waymo/demo_map_vec.npy")
-    map_vecs, map_ids = load_all_map_vectors(map_data_file)
+        map_data_file = os.path.join(folder, "../lctgen/data/demo/waymo/demo_map_vec.npy")
+        map_vecs, map_ids = load_all_map_vectors(map_data_file)
 
-    scene = gen_scenario_from_gpt_text(llm_text, cfg, model, map_vecs, map_ids, save_image=args.save_image)
+        scene = gen_scenario_from_gpt_text(llm_text, cfg, model, map_vecs, map_ids, save_image=args.save_image)
 
     print(scene["traj"].swapaxes(0, 1).tolist())
