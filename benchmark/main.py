@@ -79,6 +79,13 @@ def evaluate_method(method: str, config: dict) -> float:
         description = describe_for_lctgen(config)
         print(f"Running scenario generation based on text: \"{description}\"")
         command = f"conda run -n {conda_env} python {script_path} --text '{description}' --save_image --llm_base_url {os.environ.get('LLM_BASE_URL')} --llm_model {os.environ.get('LLM_MODEL')}"
+    elif method == "lctgen_rethink":
+        conda_env = "lctgen"
+        script_path = "-m methods.lctgen_rethink"
+
+        description = describe_for_lctgen(config)
+        print(f"Running scenario generation based on text: \"{description}\"")
+        command = f"conda run -n {conda_env} python {script_path} --text '{description}' --save_image --llm_base_url {os.environ.get('LLM_BASE_URL')} --llm_model {os.environ.get('LLM_MODEL')}"
     elif method == "prosim":
         conda_env = "prosim"
         script_path = "-m methods.prosim"
