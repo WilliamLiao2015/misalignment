@@ -26,6 +26,11 @@ def get_config(path: str) -> dict:
 
 def describe_for_lctgen(config: dict, combine=True) -> str:
     description = ""
+
+    participants_name_map = {participant: f"V{i + 1}" for i, participant in enumerate(set([participant for activity in config["activities"] for participant in activity["participants"]]))}
+    for activity in config["activities"]:
+        activity["participants"] = [participants_name_map[participant] for participant in activity["participants"]]
+
     if not combine:
         for activity in config["activities"]:
             description += f"{' and '.join(activity['participants'])} {'is' if len(activity['participants']) == 1 else 'are'} {type_map[activity['type']].lower()}, "

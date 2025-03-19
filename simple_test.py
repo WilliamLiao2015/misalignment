@@ -1,11 +1,9 @@
+import argparse
 import unittest
 
 import numpy as np
 
-from benchmark.generate import generate_configs
-from benchmark.main import describe_for_lctgen
-
-from methods.lctgen import generate_scenario
+from benchmark.main import evaluate_method, get_config
 
 from tests.test_longitudinal import TestLongitudinal
 from tests.test_lateral import TestLateral
@@ -30,21 +28,21 @@ def add_tests(suite, config: dict, trajectories: np.ndarray):
 
         if action not in test_generator_map: continue
 
-        try:
-            test = test_generator_map[action]()
-            test.set_trajectory(trajectories[indices][start:end])
-            suite.addTest(test)
-        except: pass
+        test = test_generator_map[action]()
+        test.set_trajectory(trajectories[indices][start:end])
+        suite.addTest(test)
 
 if __name__ == "__main__":
-    batch, configs = generate_configs()
-    config = configs[0]
+    parser = argparse.ArgumentParser(description="Run the tests for the generated scenarios.")
+    parser.add_argument("--config", type=str, help="The path to the configuration file.", default="benchmark/configs/turning-right.yaml")
+    parser.add_argument("--method", type=str, help="The method to evaluate.", default="lctgen")
+    args = parser.parse_args()
+
+    config = get_config(args.config)
 
     try:
-        description = describe_for_lctgen(config)
-        print(f"Running scenario generation based on text: \"{description}\"")
-        scene = generate_scenario(config["vec_map"], description)
-        trajectories = scene["traj"].swapaxes(0, 1)
+        returncode, stdout, stderr = evaluate_method(args.method, config)
+        trajectories = np.asarray(eval(stdout.decode("utf-8")))
 
         suite = unittest.TestSuite()
         add_tests(suite, config, trajectories)
