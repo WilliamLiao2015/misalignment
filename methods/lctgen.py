@@ -6,6 +6,7 @@ folder = os.path.dirname(__file__)
 sys.path.append(os.path.join(folder, "../lctgen"))
 
 import matplotlib.pyplot as plt
+import numpy as np
 import openai
 import torch
 
@@ -248,6 +249,8 @@ def draw(center, agents, traj=None, other=None, edge=None, heat_map=False):
             if x0 == 0: break
             ax.plot((x0, x1), (y0, y1), lane_color, linewidth=0.7, alpha=0.9)
 
+    limits = [ax.get_xlim(), ax.get_ylim()]
+
     for i in range(len(agents)):
         # if i in collide: continue
         if i == 0:
@@ -262,17 +265,21 @@ def draw(center, agents, traj=None, other=None, edge=None, heat_map=False):
                     x0, y0 = traj_i[j]
                     x1, y1 = traj_i[j + 1]
 
-                    ax.plot((x0, x1), (y0, y1), '-', color=col, linewidth=0.8, marker='.', markersize=3)
+                    ax.plot((x0, x1), (y0, y1), '-', color=col, linewidth=0.3, marker='.', markersize=0.5)
+
+                    limits[0] = [min(limits[0][0], x0), max(limits[0][1], x0)]
+                    limits[1] = [min(limits[1][0], y0), max(limits[1][1], y0)]
 
         agent = agents[i]
         rect = agent.get_rect()[0]
         rect = plt.Polygon(rect, edgecolor='black', facecolor=col, linewidth=0.5, zorder=10000)
         ax.add_patch(rect)
 
-    # ax.set_facecolor('black')
+    plt.xlim(limits[0])
+    plt.ylim(limits[1])
     plt.autoscale(tight=True)
 
-def generate_scenario(vector_map: VectorMap, query: str, save_image=True, log=False):
+def generate_scene(config, query: str, save_image=True, log=False):
     cfg = get_config(os.path.join(folder, "../lctgen/lctgen/gpt/cfgs/attr_ind_motion/non_api_cot_attr_20m.yaml"))
     llm = OpenAIModel(cfg, base_url=os.environ.get("LLM_BASE_URL"), api_key=os.environ.get("LLM_API_KEY"), model=os.environ.get("LLM_MODEL"))
     llm_text = llm.forward(query)
@@ -297,7 +304,7 @@ def generate_scenario(vector_map: VectorMap, query: str, save_image=True, log=Fa
         "rest": torch.empty(0).unsqueeze(0),
     }
 
-    for lane in vector_map.lanes:
+    for lane in config["vec_map"].lanes:
         center = down_sampling(lane.center.xy)
         left_edge = down_sampling(lane.left_edge.xy) if lane.left_edge is not None else None
         right_edge = down_sampling(lane.right_edge.xy) if lane.right_edge is not None else None
@@ -320,11 +327,15 @@ def generate_scenario(vector_map: VectorMap, query: str, save_image=True, log=Fa
 
     # inference with LLM-output Structured Representation
     batch["text"] = torch.tensor(agent_vector, dtype=torch.float32).unsqueeze(0)
-    batch["agent"] = torch.tensor(agent_vector, dtype=torch.float32).unsqueeze(0)
+    batch["agent"] = torch.tensor(np.asarray([history[0] for history in config["history"]]), dtype=torch.float32).unsqueeze(0)
     batch["agent_mask"] = torch.tensor([1] * agent_num + [0] * (MAX_AGENT_NUM - agent_num), dtype=torch.bool).unsqueeze(0)
     batch["file"] = torch.tensor([0], dtype=torch.int64).unsqueeze(0)
     batch["center_id"] = torch.tensor([0], dtype=torch.int64).unsqueeze(0)
-    batch["agent_vec_index"] = torch.tensor([0], dtype=torch.int64).unsqueeze(0)
+
+    participants_name_map = {f"V{i + 1}": participant for i, participant in enumerate(set([participant for activity in config["activities"] for participant in activity["participants"]]))}
+    batch["agent_vec_index"] = torch.tensor([int(participant[1:]) - 1 for participant in participants_name_map.values()], dtype=torch.int64).unsqueeze(0)
+
+    print(participants_name_map, batch["agent_vec_index"])
 
     model_output = model.trafficgen_model(batch)
     output_scene = model.process(model_output, batch, num_limit=1, with_attribute=True, pred_ego=True, pred_motion=True)

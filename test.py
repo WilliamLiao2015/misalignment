@@ -5,7 +5,7 @@ import numpy as np
 from benchmark.generate import generate_configs
 from benchmark.main import describe_for_lctgen
 
-from methods.lctgen import generate_scenario
+from methods.lctgen import generate_scene
 
 from tests.test_longitudinal import TestLongitudinal
 from tests.test_lateral import TestLateral
@@ -22,7 +22,9 @@ test_generator_map = {
 
 def add_tests(suite, config: dict, trajectories: np.ndarray):
     for activity in config["activities"]:
-        indices = [int(participant[1:]) - 1 for participant in activity["participants"]] # remove the "V" prefix and subtract 1
+        participants_name_map = {participant: f"V{i + 1}" for i, participant in enumerate(set([participant for activity in config["activities"] for participant in activity["participants"]]))}
+
+        indices = [int(participants_name_map[participant][1:]) - 1 for participant in activity["participants"]] # remove the "V" prefix and subtract 1
 
         action = activity["type"]
         start, end = activity["interval"] if "interval" in activity else (0, len(trajectories[0]))
@@ -37,13 +39,14 @@ def add_tests(suite, config: dict, trajectories: np.ndarray):
         except: pass
 
 if __name__ == "__main__":
-    batch, configs = generate_configs()
-    config = configs[0]
+    batch, configs = generate_configs(standardize_data=True)
+    config = configs[0] if len(configs) > 0 else None
 
     try:
+        if config is None: raise Exception("No valid configuration generated")
         description = describe_for_lctgen(config)
         print(f"Running scenario generation based on text: \"{description}\"")
-        scene = generate_scenario(config["vec_map"], description)
+        scene = generate_scene(config, description)
         trajectories = scene["traj"].swapaxes(0, 1)
 
         suite = unittest.TestSuite()
