@@ -2,7 +2,7 @@ import numpy as np
 
 from trajdata.dataset import UnifiedDataset
 from trajdata.data_structures import AgentBatchElement
-from typing import List
+from typing import List, Tuple
 
 from . import tests
 
@@ -49,7 +49,7 @@ def describe(batch: List[AgentBatchElement], log: bool = False) -> List[dict]:
 
     return configs
 
-def collate_fn(batch: List[AgentBatchElement]) -> List[AgentBatchElement]:
+def collate_fn(batch: List[AgentBatchElement]) -> Tuple[List[AgentBatchElement], List[dict]]:
     configs = describe(batch)
 
     return batch, configs
