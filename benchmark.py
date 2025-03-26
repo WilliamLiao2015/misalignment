@@ -104,9 +104,9 @@ def add_test_results(config: dict, trajectories: np.ndarray):
             config["activities"][i]["offroad_ratios"] = [get_offroad_ratios(vector_map, state) for state in states]
             config["activities"][i]["has_continuous_path"] = [has_continuous_path(vector_map, state) for state in states]
         except:
-            config["activities"][i]["results"] = [False] * len(indices)
-            config["activities"][i]["offroad_ratios"] = [1] * len(indices)
-            config["activities"][i]["has_continuous_path"] = [False] * len(indices)
+            config["activities"][i]["results"] = [None] * len(indices)
+            config["activities"][i]["offroad_ratios"] = [None] * len(indices)
+            config["activities"][i]["has_continuous_path"] = [None] * len(indices)
 
     return config
 
