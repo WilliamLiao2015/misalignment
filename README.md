@@ -14,40 +14,30 @@ git clone https://github.com/WilliamLiao2015/misalignment.git
 conda create -n misalignment python=3.8
 conda activate misalignment
 cd misalignment
-pip install -r requirements.txt
 ```
 
-### Set up the Trajectory Generation Methods
+### Set up LCTGen
 
-Follow the installation instructions of supported trajectory generation methods to set up the environments.
-
-Create a new conda environment for each of the following trajectory generation methods:
-
-- [LCTGen](https://github.com/Ariostgx/lctgen)
-    - Note: You might need to remove the version of `tensorflow` dependency from the `requirements.txt` file.
-- [ProSim](https://github.com/Ariostgx/ProSim)
+Follow the installation instructions of [LCTGen](https://github.com/Ariostgx/lctgen). (Note: You might need to remove the version of `tensorflow` dependency from the `requirements.txt` file.)
 
 Remember to clone the repositories to the root directory of this repository, as shown below:
 
 ```
 misalignment/
-├── lctgen/
-├── ProSim/
-└── ...
+└── lctgen/
 ```
 
-For each of the trajectory generation methods, install the following dependencies:
+Then install the following dependencies:
 
 ```bash
-conda activate <TRAJECTORY_GENERATION_METHOD_ENV>
 pip install openai --upgrade
 pip install pydantic
 pip install python-dotenv
 ```
 
-### Set up the LLM Service.
+### Set up LLM Service
 
-Create `.env` file in the root directory of the repository with the following content:
+Create `.env` or `.env.local` file in the root directory of the repository with the following content:
 
 ```
 LLM_BASE_URL=<YOUR_LLM_BASE_URL>
@@ -62,5 +52,5 @@ Notice that this repository uses OpenAI compatible API for the LLM service.
 ### Evaluate Misalignment
 
 ```bash
-python -m test --config <CONFIG_FILE> --method <METHOD>
+python benchmark.py --num_configs 1
 ```
