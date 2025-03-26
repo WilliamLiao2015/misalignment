@@ -10,12 +10,12 @@ DATASET:
     ENABLE: true
     RANDOM_MASK_RATE: 0.1
   TRAJ_TYPE: xy_theta_relative
-  DATA_PATH: lctgen/data/demo/waymo
+  DATA_PATH: data/processed
   DATA_LIST:
-    ROOT: lctgen/data/list
-    TEST: demo.txt
-    VAL: demo.txt
-    TRAIN: demo.txt
+    ROOT: data/list
+    TEST: benchmark.txt
+    VAL: benchmark.txt
+    TRAIN: benchmark.txt
   TEXT:
     TYPE: attr_ind
     ALL_CLASSES:

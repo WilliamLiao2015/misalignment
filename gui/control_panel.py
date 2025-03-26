@@ -1,7 +1,7 @@
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QVBoxLayout, QWidget, QLabel, QPlainTextEdit, QComboBox
 
-from methods.lctgen import generate_scenario as generate_scenario_with_lctgen
+from methods.lctgen import generate_scene as generate_scenario_with_lctgen
 
 class ControlPanel(QWidget):
     def __init__(self, window):
