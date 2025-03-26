@@ -16,22 +16,24 @@ epsilon_straight = np.pi / 12
 epsilon_turning = np.pi / 6
 
 def is_turning_left(vector_map: VectorMap, state: StateArray) -> Optional[Tuple[int, int]]:
+    initial_angle = np.arctan2(state[1, 1] - state[0, 1], state[1, 0] - state[0, 0])
     for t in range(len(state) - minimum_period):
         angles = np.asarray([np.arctan2(y2 - y1, x2 - x1) for (x1, y1), (x2, y2) in zip(state[t:t + minimum_period], state[t + 1:t + minimum_period + 1])])
-        diffs = (angles[1:] - angles[0] + np.pi) % (2 * np.pi) - np.pi
-        if not (np.all(diffs < epsilon_straight) and diffs[-1] < -epsilon_turning): continue
+        diffs = (angles[1:] - initial_angle + np.pi) % (2 * np.pi) - np.pi
+        if not (np.all(diffs < epsilon_straight) and diffs[-1] - initial_angle > epsilon_turning): continue
+        return t, t + minimum_period
 
-        starts = set([lane.id for lane in vector_map.get_lanes_within(np.asarray([*state[t, :2], 1]), 5)])
-        ends = set([lane.id for lane in vector_map.get_lanes_within(np.asarray([*state[t + minimum_period, :2], 1]), 5)]).difference(starts)
-        currents = starts.copy()
-        for _ in range(5):
-            new_currents = currents.copy()
-            for lane_id in currents:
-                try: new_currents.update(vector_map.get_road_lane(lane_id).reachable_lanes)
-                except: pass
-                if ends.intersection(new_currents):
-                    return t, t + minimum_period
-            currents = new_currents
+        # starts = set([lane.id for lane in vector_map.get_lanes_within(np.asarray([*state[t, :2], 1]), 5)])
+        # ends = set([lane.id for lane in vector_map.get_lanes_within(np.asarray([*state[t + minimum_period, :2], 1]), 5)]).difference(starts)
+        # currents = starts.copy()
+        # for _ in range(5):
+        #     new_currents = currents.copy()
+        #     for lane_id in currents:
+        #         try: new_currents.update(vector_map.get_road_lane(lane_id).reachable_lanes)
+        #         except: pass
+        #         if ends.intersection(new_currents):
+        #             return t, t + minimum_period
+        #     currents = new_currents
 
     # if np.allclose(state[-1] - state[0], 0): return None
 
@@ -60,22 +62,24 @@ def is_turning_left(vector_map: VectorMap, state: StateArray) -> Optional[Tuple[
     return None
 
 def is_turning_right(vector_map: VectorMap, state: StateArray) -> Optional[Tuple[int, int]]:
+    initial_angle = np.arctan2(state[1, 1] - state[0, 1], state[1, 0] - state[0, 0])
     for t in range(len(state) - minimum_period):
         angles = np.asarray([np.arctan2(y2 - y1, x2 - x1) for (x1, y1), (x2, y2) in zip(state[t:t + minimum_period], state[t + 1:t + minimum_period + 1])])
-        diffs = (angles[1:] - angles[0] + np.pi) % (2 * np.pi) - np.pi
-        if not (np.all(diffs < epsilon_straight) and diffs[-1] > epsilon_turning): continue
+        diffs = (angles[1:] - initial_angle + np.pi) % (2 * np.pi) - np.pi
+        if not (np.all(diffs < epsilon_straight) and diffs[-1] - initial_angle < -epsilon_turning): continue
+        return t, t + minimum_period
 
-        starts = set([lane.id for lane in vector_map.get_lanes_within(np.asarray([*state[t, :2], 1]), 5)])
-        ends = set([lane.id for lane in vector_map.get_lanes_within(np.asarray([*state[t + minimum_period, :2], 1]), 5)]).difference(starts)
-        currents = starts.copy()
-        for _ in range(5):
-            new_currents = currents.copy()
-            for lane_id in currents:
-                try: new_currents.update(vector_map.get_road_lane(lane_id).reachable_lanes)
-                except: pass
-                if ends.intersection(new_currents):
-                    return t, t + minimum_period
-            currents = new_currents
+        # starts = set([lane.id for lane in vector_map.get_lanes_within(np.asarray([*state[t, :2], 1]), 5)])
+        # ends = set([lane.id for lane in vector_map.get_lanes_within(np.asarray([*state[t + minimum_period, :2], 1]), 5)]).difference(starts)
+        # currents = starts.copy()
+        # for _ in range(5):
+        #     new_currents = currents.copy()
+        #     for lane_id in currents:
+        #         try: new_currents.update(vector_map.get_road_lane(lane_id).reachable_lanes)
+        #         except: pass
+        #         if ends.intersection(new_currents):
+        #             return t, t + minimum_period
+        #     currents = new_currents
 
     # if np.allclose(state[-1] - state[0], 0): return None
 

@@ -15,6 +15,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import torch
 
+from shapely.geometry import LineString
+from shapely.ops import linemerge
 from trajdata.data_structures import StateArray
 from trajdata.maps.vec_map import VectorMap
 from trajdata.maps.vec_map_elements import RoadLane, Polyline
@@ -25,8 +27,9 @@ from lctgen.datasets.utils import fc_collate_fn
 from lctgen.inference.utils import output_formating_cot, vis_decode
 from lctgen.models import LCTGen
 
-from benchmark.longitudinal import is_accelerating, is_cruising, is_decelerating, is_standing_still
 from benchmark.lateral import is_turning_left, is_turning_right
+from benchmark.longitudinal import is_accelerating, is_cruising, is_decelerating, is_standing_still
+from benchmark.road_structure import get_offroad_ratios, has_continuous_path
 from dataset import LCTGenBaseDataset
 from llm import LCTGenBaseLLM
 from utils.get_possible_activities import get_possible_activities
@@ -96,9 +99,14 @@ def add_test_results(config: dict, trajectories: np.ndarray):
         try:
             print(f"Running test for activity: {action}", indices)
             print([test_map[action](vector_map, StateArray.from_array(trajectories[index], "x,y")) for index in indices])
-            config["activities"][i]["results"] = [bool(test_map[action](vector_map, StateArray.from_array(trajectories[index], "x,y"))) for index in indices]
+            states = [StateArray.from_array(trajectories[index], "x,y") for index in indices]
+            config["activities"][i]["results"] = [bool(test_map[action](vector_map, state)) for state in states]
+            config["activities"][i]["offroad_ratios"] = [get_offroad_ratios(vector_map, state) for state in states]
+            config["activities"][i]["has_continuous_path"] = [has_continuous_path(vector_map, state) for state in states]
         except:
             config["activities"][i]["results"] = [False] * len(indices)
+            config["activities"][i]["offroad_ratios"] = [1] * len(indices)
+            config["activities"][i]["has_continuous_path"] = [False] * len(indices)
 
     return config
 
@@ -107,10 +115,9 @@ def generate_scenario(model, llm, config, batch):
     MAX_AGENT_NUM = 32
 
     config = describe_for_lctgen(config)
-    llm_text = llm.forward(config["description"])
-
     print(f"Running scenario generation based on text: \"{config['description']}\"")
 
+    llm_text = llm.forward(config["description"])
     agent_vector, map_vector = output_formating_cot(llm_text) if isinstance(llm_text, str) else llm_text
 
     agent_num = len(agent_vector)
@@ -163,29 +170,50 @@ if __name__ == "__main__":
 
                 vector_map = VectorMap(map_id="waymo_val:temp")
                 vector_map.extent = [np.inf, np.inf, 0, 0, 0, 0]
-                vector_map.lanes = []
-                for key, value in scenario["center_info"].items():
+                lanes = {}
+                for i, center_id in enumerate(data["center_id"].squeeze().tolist()):
+                    if center_id == 0: break
                     try:
-                        points = np.asarray([[x, y] for x, y, type, id in scenario["lane"] if id == key and type == 2])
+                        current_lane = scenario["center_info"][center_id]
+                        x1, y1, x2, y2 = data["center"][i, :4]
                         vector_map.extent = [
-                            min(vector_map.extent[0], np.min(points[:, 0])),
-                            min(vector_map.extent[1], np.min(points[:, 1])),
+                            min(vector_map.extent[0], np.min([x1, x2])),
+                            min(vector_map.extent[1], np.min([y1, y2])),
                             0,
-                            max(vector_map.extent[3], np.max(points[:, 0])),
-                            max(vector_map.extent[4], np.max(points[:, 1])),
+                            max(vector_map.extent[3], np.max([x1, x2])),
+                            max(vector_map.extent[4], np.max([y1, y2])),
                             0
                         ]
-                        lane = RoadLane(
-                            id=key,
-                            center=Polyline(points),
-                            adj_lanes_left=set([lane["id"] for lane in value["left_neighbor"]]),
-                            adj_lanes_right=set([lane["id"] for lane in value["right_neighbor"]]),
-                            next_lanes=set([lane_id for lane_id in value["exit"]]),
-                            prev_lanes=set([lane_id for lane_id in value["entry"]])
-                        )
-                        vector_map.add_map_element(lane)
-                        vector_map.lanes.append(lane)
-                    except: continue
+
+                        # print(f"Adding lane {center_id} with center ({x1}, {y1}) to ({x2}, {y2})")
+
+                        if center_id not in lanes:
+                            lanes[center_id] = {
+                                "center": [LineString([(x1, y1), (x2, y2)])],
+                                "adj_lanes_left": set([lane["id"] for lane in current_lane["left_neighbor"]]),
+                                "adj_lanes_right": set([lane["id"] for lane in current_lane["right_neighbor"]]),
+                                "next_lanes": set([lane_id for lane_id in current_lane["exit"]]),
+                                "prev_lanes": set([lane_id for lane_id in current_lane["entry"]])
+                            }
+                        else: lanes[center_id]["center"].append(LineString([(x1, y1), (x2, y2)]))
+                    except Exception as e:
+                        raise e
+
+                vector_map.lanes = []
+                for lane_id, lane in lanes.items():
+                    center = linemerge(lane["center"])
+                    if center.is_empty: continue
+                    x, y = center.xy
+                    lane = RoadLane(
+                        id=lane_id,
+                        center=Polyline(np.asarray([x, y]).T),
+                        adj_lanes_left=lane["adj_lanes_left"],
+                        adj_lanes_right=lane["adj_lanes_right"],
+                        next_lanes=lane["next_lanes"],
+                        prev_lanes=lane["prev_lanes"]
+                    )
+                    vector_map.add_map_element(lane)
+                    vector_map.lanes.append(lane)
 
                 try: vector_map.compute_search_indices()
                 except: continue
@@ -201,7 +229,7 @@ if __name__ == "__main__":
                 #     "participants": [f"V{i + 1}"]
                 # }  for test_type, results in config["tests"].items() for i, result in enumerate(results) if result is not None and result[0] < 15 and test_type != "longitudinal:standing-still"]
 
-                activities = get_possible_activities(vector_map, [StateArray.from_array(traj, "x,y") for traj in data["agent_abs"].swapaxes(0, 1)])
+                activities = get_possible_activities(vector_map, [StateArray.from_array(agent[:2], "x,y") for agent in data["gt_pos"].swapaxes(0, 1)])
 
                 if len(activities) == 0: continue
                 # print(activities)
@@ -246,13 +274,15 @@ if __name__ == "__main__":
                     plt.axis("off")
                     for lane in vector_map.iter_elems():
                         plt.plot(*zip(*lane.center.xy), color="black", linewidth=0.5)
-                    for i, agent in enumerate(data["agent_abs"].swapaxes(0, 1)):
-                        agent = agent[:, :2]
-                        agent = agent[agent != [0, 0]].reshape(-1, 2)
-                        if len(agent) == 0: continue
-                        plt.plot(agent[:, 0], agent[:, 1], color="red", linewidth=1)
+                    for i, agent in enumerate(data["gt_pos"].swapaxes(0, 1)):
+                        # agent = agent[:, :2]
+                        # agent = agent[agent != [0, 0]].reshape(-1, 2)
+                        # if len(agent) == 0: continue
+                        # plt.plot(agent[:, 0], agent[:, 1], color="red", linewidth=1)
                         plt.scatter(agent[0, 0], agent[0, 1], color="red", s=2)
                         plt.text(agent[0, 0], agent[0, 1], f"V{i + 1}", fontsize=8, color="red")
+                    plt.xlim(-60, 60)
+                    plt.ylim(-60, 60)
                     plt.savefig(os.path.join(folder, "original-scenario.png"), bbox_inches="tight", pad_inches=0, dpi=300)
                     plt.close()
 
@@ -260,6 +290,7 @@ if __name__ == "__main__":
                 scenario = generate_scenario(model, llm, config, batch)
                 trajectories = scenario[0]["traj"].swapaxes(0, 1)
                 config = add_test_results(config, trajectories)
+                config["trajectories"] = trajectories.tolist()
 
                 if args.save_image:
                     image = vis_decode(batch, scenario)
