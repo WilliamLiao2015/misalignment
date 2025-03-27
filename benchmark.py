@@ -140,6 +140,7 @@ if __name__ == "__main__":
     parser.add_argument("--llm_base_url", type=str, help="The base URL for the LLM API.")
     parser.add_argument("--llm_model", type=str, help="The model to use for the LLM API.")
     parser.add_argument("--llm_api_key", type=str, help="The API key for the LLM API.")
+    parser.add_argument("--required_activities", help="The activities that must be included in the generated scenario.", nargs="*", default=[])
     args = parser.parse_args()
 
     try:
@@ -201,19 +202,21 @@ if __name__ == "__main__":
 
                 vector_map.lanes = []
                 for lane_id, lane in lanes.items():
-                    center = linemerge(lane["center"])
-                    if center.is_empty: continue
-                    x, y = center.xy
-                    lane = RoadLane(
-                        id=lane_id,
-                        center=Polyline(np.asarray([x, y]).T),
-                        adj_lanes_left=lane["adj_lanes_left"],
-                        adj_lanes_right=lane["adj_lanes_right"],
-                        next_lanes=lane["next_lanes"],
-                        prev_lanes=lane["prev_lanes"]
-                    )
-                    vector_map.add_map_element(lane)
-                    vector_map.lanes.append(lane)
+                    try:
+                        center = linemerge(lane["center"])
+                        if center.is_empty: continue
+                        x, y = center.xy
+                        lane = RoadLane(
+                            id=lane_id,
+                            center=Polyline(np.asarray([x, y]).T),
+                            adj_lanes_left=lane["adj_lanes_left"],
+                            adj_lanes_right=lane["adj_lanes_right"],
+                            next_lanes=lane["next_lanes"],
+                            prev_lanes=lane["prev_lanes"]
+                        )
+                        vector_map.add_map_element(lane)
+                        vector_map.lanes.append(lane)
+                    except: continue
 
                 try: vector_map.compute_search_indices()
                 except: continue
@@ -235,11 +238,21 @@ if __name__ == "__main__":
                 # print(activities)
 
                 config = {"activities": []}
-                for _ in range(min(len(activities), 5)):
-                    existing_participants = set([participant for activity in config["activities"] for participant in activity["participants"]])
-                    candidates = [activity for activity in activities if activity["participants"][0] not in existing_participants]
-                    if len(candidates) == 0: break
-                    config["activities"].append(random.choice(candidates))
+                if len(args.required_activities) > 0:
+                    for activity_type in args.required_activities:
+                        for activity in activities:
+                            if activity_type in activity["type"]:
+                                config["activities"].append(activity)
+                                break
+                    if len(config["activities"]) < len(args.required_activities):
+                        print(f"Failed to find all required activities: {args.required_activities} with current map, retrying...")
+                        continue
+                else:
+                    for _ in range(min(len(activities), 5)):
+                        existing_participants = set([participant for activity in config["activities"] for participant in activity["participants"]])
+                        candidates = [activity for activity in activities if activity["participants"][0] not in existing_participants]
+                        if len(candidates) == 0: break
+                        config["activities"].append(random.choice(candidates))
                 # print(config["activities"])
 
                 # import cv2
