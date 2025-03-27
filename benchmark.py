@@ -141,6 +141,7 @@ if __name__ == "__main__":
     parser.add_argument("--llm_model", type=str, help="The model to use for the LLM API.")
     parser.add_argument("--llm_api_key", type=str, help="The API key for the LLM API.")
     parser.add_argument("--required_activities", help="The activities that must be included in the generated scenario.", nargs="*", default=[])
+    parser.add_argument("--num_activities", type=int, help="The number of activities to include in the generated scenario.", default=5)
     args = parser.parse_args()
 
     try:
@@ -247,12 +248,11 @@ if __name__ == "__main__":
                     if len(config["activities"]) < len(args.required_activities):
                         print(f"Failed to find all required activities: {args.required_activities} with current map, retrying...")
                         continue
-                else:
-                    for _ in range(min(len(activities), 5)):
-                        existing_participants = set([participant for activity in config["activities"] for participant in activity["participants"]])
-                        candidates = [activity for activity in activities if activity["participants"][0] not in existing_participants]
-                        if len(candidates) == 0: break
-                        config["activities"].append(random.choice(candidates))
+                for _ in range(min(len(activities), args.num_activities - len(config["activities"]))):
+                    existing_participants = set([participant for activity in config["activities"] for participant in activity["participants"]])
+                    candidates = [activity for activity in activities if activity["participants"][0] not in existing_participants]
+                    if len(candidates) == 0: break
+                    config["activities"].append(random.choice(candidates))
                 # print(config["activities"])
 
                 # import cv2
