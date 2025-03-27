@@ -263,7 +263,7 @@ if __name__ == "__main__":
                 # print(scene["all_agent"].swapaxes(0, 1).shape)
 
                 time_str = time.strftime("%Y-%m-%d_%H-%M-%S")
-                folder = os.path.join(os.path.dirname(__file__), "data/results", f"{time_str}")
+                folder = os.path.join(os.path.dirname(__file__), "data/results", os.environ["LLM_MODEL"], f"{time_str}")
 
                 if not os.path.exists(folder):
                     os.makedirs(folder)
