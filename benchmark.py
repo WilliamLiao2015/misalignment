@@ -135,14 +135,14 @@ def visualize_input_seq(data, agents, traj, clip_size=True):
 
     return plot
 
-def generate_scenario(model, llm, config, batch, use_structured_output=False):
+def generate_scenario(model, llm, config, batch):
     # format LLM output to Structured Representation (agent and map vectors)
     MAX_AGENT_NUM = 32
 
     config = describe_for_lctgen(config)
     print(f"Running scenario generation based on text: \"{config['description']}\"")
 
-    llm_text = llm.forward(config["description"], use_structured_output=use_structured_output)
+    llm_text = llm.forward(config["description"])
     agent_vector, map_vector = output_formating_cot(llm_text) if isinstance(llm_text, str) else llm_text
 
     agent_num = len(agent_vector)
@@ -179,7 +179,7 @@ if __name__ == "__main__":
     except: pass
 
     cfg = get_config(os.path.join(folder, "lctgen/lctgen/gpt/cfgs/attr_ind_motion/non_api_cot_attr_20m.yaml"))
-    llm = LCTGenBaseLLM(cfg, base_url=os.environ.get("LLM_BASE_URL"), api_key=os.environ.get("LLM_API_KEY"), model=os.environ.get("LLM_MODEL"))
+    llm = LCTGenBaseLLM(cfg, base_url=os.environ.get("LLM_BASE_URL"), api_key=os.environ.get("LLM_API_KEY"), model=os.environ.get("LLM_MODEL"), use_structured_output=args.use_structured_output)
 
     cfg = get_config(os.path.join(folder, "configs/lctgen.yaml"))
     model = LCTGen.load_from_checkpoint(cfg.LOAD_CHECKPOINT_PATH, config=cfg, metrics=[], strict=False)
@@ -301,7 +301,7 @@ if __name__ == "__main__":
                 plt.close()
 
             batch = fc_collate_fn(batch)
-            scenario = generate_scenario(model, llm, config, batch, use_structured_output=args.use_structured_output)[0]
+            scenario = generate_scenario(model, llm, config, batch)[0]
             trajectories = scenario["traj"].swapaxes(0, 1)
             config = add_test_results(config, trajectories)
             config["trajectories"] = trajectories.tolist()

@@ -28,11 +28,12 @@ class LCTGenStructuredRepresentation(BaseModel):
     map: MapVector
 
 class LCTGenBaseLLM(BasicLLM):
-    def __init__(self, config, base_url=None, api_key=None, model="gpt-4o-mini"):
+    def __init__(self, config, base_url=None, api_key=None, model="gpt-4o-mini", use_structured_output=False):
         super().__init__(config)
 
         self.base_url = base_url
         self.model = model
+        self.use_structured_output = use_structured_output
 
         self.client = openai.Client(base_url=base_url, api_key=api_key)
 
@@ -52,7 +53,7 @@ class LCTGenBaseLLM(BasicLLM):
         extended_prompt = base_prompt.replace("INSERT_QUERY_HERE", query)
         return extended_prompt
 
-    def llm_query(self, extended_prompt, use_structured_output=False):
+    def llm_query(self, extended_prompt):
         if self.codex_cfg.MODEL == "debug":
             resp = self.sys_prompt
         elif self.model.startswith("gpt-"):
@@ -88,7 +89,7 @@ class LCTGenBaseLLM(BasicLLM):
                     {"role": "user", "content": extended_prompt}
                 ],
                 max_tokens=-1,
-                response_format=LCTGenStructuredRepresentation if use_structured_output else None
+                **({"response_format": LCTGenStructuredRepresentation} if self.use_structured_output else {})
             )
             representation = responses.choices[0].message.parsed
             agents = [[agent.position_negative_for_ego, agent.distance_from_ego, agent.direction_wrt_ego, agent.speed_interval, *agent.action_in_next_4s] for agent in representation.agents]
