@@ -150,170 +150,132 @@ if __name__ == "__main__":
         os.environ["LLM_API_KEY"] = args.llm_api_key
     except: pass
 
-    try:
-        cfg = get_config(os.path.join(folder, "lctgen/lctgen/gpt/cfgs/attr_ind_motion/non_api_cot_attr_20m.yaml"))
-        llm = LCTGenBaseLLM(cfg, base_url=os.environ.get("LLM_BASE_URL"), api_key=os.environ.get("LLM_API_KEY"), model=os.environ.get("LLM_MODEL"))
+    cfg = get_config(os.path.join(folder, "lctgen/lctgen/gpt/cfgs/attr_ind_motion/non_api_cot_attr_20m.yaml"))
+    llm = LCTGenBaseLLM(cfg, base_url=os.environ.get("LLM_BASE_URL"), api_key=os.environ.get("LLM_API_KEY"), model=os.environ.get("LLM_MODEL"))
 
-        cfg = get_config(os.path.join(folder, "configs/lctgen.yaml"))
-        model = LCTGen.load_from_checkpoint(cfg.LOAD_CHECKPOINT_PATH, config=cfg, metrics=[], strict=False)
-        model.eval()
+    cfg = get_config(os.path.join(folder, "configs/lctgen.yaml"))
+    model = LCTGen.load_from_checkpoint(cfg.LOAD_CHECKPOINT_PATH, config=cfg, metrics=[], strict=False)
+    model.eval()
 
-        cfg["DATASET"]["CACHE"] = False
-        dataset = LCTGenBaseDataset(cfg, "train")
+    cfg["DATASET"]["CACHE"] = False
+    dataset = LCTGenBaseDataset(cfg, "train")
 
-        success_count = 0
+    success_count = 0
 
-        while success_count < args.num_configs:
-            batch = random.choices(dataset, k=1)
+    while success_count < args.num_configs:
+        batch = random.choices(dataset, k=1)
 
-            for data in batch:
-                with open(os.path.join(os.path.dirname(__file__), "data/processed", data["file"].strip()), "rb") as fp:
-                    scenario = pickle.load(fp)
+        for data in batch:
+            with open(os.path.join(os.path.dirname(__file__), "data/processed", data["file"].strip()), "rb") as fp:
+                scenario = pickle.load(fp)
 
-                vector_map = VectorMap(map_id="waymo_val:temp")
-                vector_map.extent = [np.inf, np.inf, 0, 0, 0, 0]
-                lanes = {}
-                for i, center_id in enumerate(data["center_id"].squeeze().tolist()):
-                    if center_id == 0: break
-                    try:
-                        current_lane = scenario["center_info"][center_id]
-                        x1, y1, x2, y2 = data["center"][i, :4]
-                        vector_map.extent = [
-                            min(vector_map.extent[0], np.min([x1, x2])),
-                            min(vector_map.extent[1], np.min([y1, y2])),
-                            0,
-                            max(vector_map.extent[3], np.max([x1, x2])),
-                            max(vector_map.extent[4], np.max([y1, y2])),
-                            0
-                        ]
+            vector_map = VectorMap(map_id="waymo_val:temp")
+            vector_map.extent = [np.inf, np.inf, 0, 0, 0, 0]
+            lanes = {}
+            for i, center_id in enumerate(data["center_id"].squeeze().tolist()):
+                if center_id == 0: break
+                try:
+                    current_lane = scenario["center_info"][center_id]
+                    x1, y1, x2, y2 = data["center"][i, :4]
+                    vector_map.extent = [
+                        min(vector_map.extent[0], np.min([x1, x2])),
+                        min(vector_map.extent[1], np.min([y1, y2])),
+                        0,
+                        max(vector_map.extent[3], np.max([x1, x2])),
+                        max(vector_map.extent[4], np.max([y1, y2])),
+                        0
+                    ]
 
-                        # print(f"Adding lane {center_id} with center ({x1}, {y1}) to ({x2}, {y2})")
+                    # print(f"Adding lane {center_id} with center ({x1}, {y1}) to ({x2}, {y2})")
 
-                        if center_id not in lanes:
-                            lanes[center_id] = {
-                                "center": [LineString([(x1, y1), (x2, y2)])],
-                                "adj_lanes_left": set([lane["id"] for lane in current_lane["left_neighbor"]]),
-                                "adj_lanes_right": set([lane["id"] for lane in current_lane["right_neighbor"]]),
-                                "next_lanes": set([lane_id for lane_id in current_lane["exit"]]),
-                                "prev_lanes": set([lane_id for lane_id in current_lane["entry"]])
-                            }
-                        else: lanes[center_id]["center"].append(LineString([(x1, y1), (x2, y2)]))
-                    except Exception as e:
-                        raise e
-
-                vector_map.lanes = []
-                for lane_id, lane in lanes.items():
-                    try:
-                        center = linemerge(lane["center"])
-                        if center.is_empty: continue
-                        x, y = center.xy
-                        lane = RoadLane(
-                            id=lane_id,
-                            center=Polyline(np.asarray([x, y]).T),
-                            adj_lanes_left=lane["adj_lanes_left"],
-                            adj_lanes_right=lane["adj_lanes_right"],
-                            next_lanes=lane["next_lanes"],
-                            prev_lanes=lane["prev_lanes"]
-                        )
-                        vector_map.add_map_element(lane)
-                        vector_map.lanes.append(lane)
-                    except: continue
-
-                try: vector_map.compute_search_indices()
+                    if center_id not in lanes:
+                        lanes[center_id] = {
+                            "center": [LineString([(x1, y1), (x2, y2)])],
+                            "adj_lanes_left": set([lane["id"] for lane in current_lane["left_neighbor"]]),
+                            "adj_lanes_right": set([lane["id"] for lane in current_lane["right_neighbor"]]),
+                            "next_lanes": set([lane_id for lane_id in current_lane["exit"]]),
+                            "prev_lanes": set([lane_id for lane_id in current_lane["entry"]])
+                        }
+                    else: lanes[center_id]["center"].append(LineString([(x1, y1), (x2, y2)]))
                 except: continue
 
-                # config = {"tests": {}}
-                # for test_name, test_func in tests.items():
-                #     agents = [StateArray.from_array(traj, "x,y") for traj in data["agent_abs"].swapaxes(0, 1)]
-                #     config["tests"][test_name] = [test_func(vector_map, agent) for agent in agents]
-                # configs.append(config)
+            vector_map.lanes = []
+            for lane_id, lane in lanes.items():
+                try:
+                    center = linemerge(lane["center"])
+                    if center.is_empty: continue
+                    x, y = center.xy
+                    lane = RoadLane(
+                        id=lane_id,
+                        center=Polyline(np.asarray([x, y]).T),
+                        adj_lanes_left=lane["adj_lanes_left"],
+                        adj_lanes_right=lane["adj_lanes_right"],
+                        next_lanes=lane["next_lanes"],
+                        prev_lanes=lane["prev_lanes"]
+                    )
+                    vector_map.add_map_element(lane)
+                    vector_map.lanes.append(lane)
+                except: continue
 
-                # activities = [{
-                #     "type": test_type,
-                #     "participants": [f"V{i + 1}"]
-                # }  for test_type, results in config["tests"].items() for i, result in enumerate(results) if result is not None and result[0] < 15 and test_type != "longitudinal:standing-still"]
+            try: vector_map.compute_search_indices()
+            except: continue
 
-                activities = get_possible_activities(vector_map, [StateArray.from_array(agent[:2], "x,y") for agent in data["gt_pos"].swapaxes(0, 1)])
+            activities = get_possible_activities(vector_map, [StateArray.from_array(agent[:2], "x,y") for agent in data["gt_pos"].swapaxes(0, 1)])
 
-                if len(activities) == 0: continue
-                # print(activities)
+            if len(activities) == 0: continue
+            # print(activities)
 
-                config = {"activities": []}
-                if len(args.required_activities) > 0:
-                    for activity_type in args.required_activities:
-                        for activity in activities:
-                            if activity_type in activity["type"]:
-                                config["activities"].append(activity)
-                                break
-                    if len(config["activities"]) < len(args.required_activities):
-                        print(f"Failed to find all required activities: {args.required_activities} with current map, retrying...")
-                        continue
-                for _ in range(min(len(activities), args.num_activities - len(config["activities"]))):
-                    existing_participants = set([participant for activity in config["activities"] for participant in activity["participants"]])
-                    candidates = [activity for activity in activities if activity["participants"][0] not in existing_participants]
-                    if len(candidates) == 0: break
-                    config["activities"].append(random.choice(candidates))
-                # print(config["activities"])
+            config = {"activities": []}
+            if len(args.required_activities) > 0:
+                for activity_type in args.required_activities:
+                    for activity in activities:
+                        existing_participants = set([participant for activity in config["activities"] for participant in activity["participants"]])
+                        if activity_type in activity["type"] and len(set(activity["participants"]).intersection(existing_participants)) == 0:
+                            config["activities"].append(activity)
+                            break
+                if len(config["activities"]) < len(args.required_activities):
+                    print(f"Failed to find all required activities: {args.required_activities} with current map, retrying...")
+                    continue
+            for _ in range(min(len(activities), args.num_activities - len(config["activities"]))):
+                existing_participants = set([participant for activity in config["activities"] for participant in activity["participants"]])
+                candidates = [activity for activity in activities if activity["participants"][0] not in existing_participants]
+                if len(candidates) == 0: break
+                config["activities"].append(random.choice(candidates))
+            # print(config["activities"])
 
-                # import cv2
-                # import matplotlib.pyplot as plt
+            time_str = time.strftime("%Y-%m-%d_%H-%M-%S")
+            folder = os.path.join(os.path.dirname(__file__), "data/results", os.environ["LLM_MODEL"], f"{time_str}")
 
-                # image = vector_map.rasterize(resolution=10, incl_lane_area=False)
-                # alpha = (~np.all(image == [0, 0, 0], axis=-1) * 255).astype(np.uint8)
-                # image = np.dstack((image * 255, alpha)).astype(np.uint8)
-                # image = cv2.cvtColor(image, cv2.COLOR_BGRA2RGBA)
-                # image = np.flipud(image)
+            if not os.path.exists(folder):
+                os.makedirs(folder)
 
-                # plt.imshow(image)
-                # plt.show()
+            if args.save_image:
+                plt.figure(figsize=(10, 10))
+                plt.axis("equal")
+                plt.axis("off")
+                for lane in vector_map.iter_elems():
+                    plt.plot(*zip(*lane.center.xy), color="black", linewidth=0.5)
+                for i, agent in enumerate(data["gt_pos"].swapaxes(0, 1)):
+                    plt.scatter(agent[0, 0], agent[0, 1], color="red", s=2)
+                    plt.text(agent[0, 0], agent[0, 1], f"V{i + 1}", fontsize=8, color="red")
+                plt.xlim(-60, 60)
+                plt.ylim(-60, 60)
+                plt.savefig(os.path.join(folder, "original-scenario.png"), bbox_inches="tight", pad_inches=0, dpi=300)
+                plt.close()
 
-                # for agent in scene["all_agent"].swapaxes(0, 1):
-                #     agent = agent[:, :2]
-                #     agent = agent[agent != [0, 0]].reshape(-1, 2)
-                #     if len(agent) == 0: continue
-                #     plt.plot(agent[:, 0], agent[:, 1], color="blue", linewidth=1.5)
-                #     plt.scatter(agent[-1, 0], agent[-1, 1], color="blue", s=2)
-                # print(scene["all_agent"].swapaxes(0, 1).shape)
+            batch = fc_collate_fn(batch)
+            scenario = generate_scenario(model, llm, config, batch)
+            trajectories = scenario[0]["traj"].swapaxes(0, 1)
+            config = add_test_results(config, trajectories)
+            config["trajectories"] = trajectories.tolist()
 
-                time_str = time.strftime("%Y-%m-%d_%H-%M-%S")
-                folder = os.path.join(os.path.dirname(__file__), "data/results", os.environ["LLM_MODEL"], f"{time_str}")
+            if args.save_image:
+                image = vis_decode(batch, scenario)
 
-                if not os.path.exists(folder):
-                    os.makedirs(folder)
+                with open(os.path.join(folder, "lctgen-scenario.png"), "wb") as fp:
+                    image.save(fp)
 
-                if args.save_image:
-                    plt.figure(figsize=(10, 10))
-                    plt.axis("equal")
-                    plt.axis("off")
-                    for lane in vector_map.iter_elems():
-                        plt.plot(*zip(*lane.center.xy), color="black", linewidth=0.5)
-                    for i, agent in enumerate(data["gt_pos"].swapaxes(0, 1)):
-                        # agent = agent[:, :2]
-                        # agent = agent[agent != [0, 0]].reshape(-1, 2)
-                        # if len(agent) == 0: continue
-                        # plt.plot(agent[:, 0], agent[:, 1], color="red", linewidth=1)
-                        plt.scatter(agent[0, 0], agent[0, 1], color="red", s=2)
-                        plt.text(agent[0, 0], agent[0, 1], f"V{i + 1}", fontsize=8, color="red")
-                    plt.xlim(-60, 60)
-                    plt.ylim(-60, 60)
-                    plt.savefig(os.path.join(folder, "original-scenario.png"), bbox_inches="tight", pad_inches=0, dpi=300)
-                    plt.close()
+            with open(os.path.join(folder, "config.yaml"), "w") as fp:
+                yaml.dump(config, fp)
 
-                batch = fc_collate_fn(batch)
-                scenario = generate_scenario(model, llm, config, batch)
-                trajectories = scenario[0]["traj"].swapaxes(0, 1)
-                config = add_test_results(config, trajectories)
-                config["trajectories"] = trajectories.tolist()
-
-                if args.save_image:
-                    image = vis_decode(batch, scenario)
-
-                    with open(os.path.join(folder, "lctgen-scenario.png"), "wb") as fp:
-                        image.save(fp)
-
-                with open(os.path.join(folder, "config.yaml"), "w") as fp:
-                    yaml.dump(config, fp)
-
-                success_count += 1
-    except Exception as e:
-        raise e
+            success_count += 1
