@@ -166,7 +166,7 @@ if __name__ == "__main__":
     parser.add_argument("--benchmark_name", type=str, help="The name of the benchmark to run.", default="")
     parser.add_argument("--save_image", action="store_true", help="Save the generated image.", default=True)
     parser.add_argument("--save_prefix", action="store_true", help="Save the generated image with a prefix.", default=True)
-    parser.add_argument("--use_structured_output", action="store_false", help="Use structured output from the LLM.", default=False)
+    parser.add_argument("--use_structured_output", action="store_true", help="Use structured output for the LLM.", default=False)
     parser.add_argument("--llm_base_url", type=str, help="The base URL for the LLM API.")
     parser.add_argument("--llm_model", type=str, help="The model to use for the LLM API.")
     parser.add_argument("--llm_api_key", type=str, help="The API key for the LLM API.")
