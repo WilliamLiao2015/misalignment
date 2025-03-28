@@ -163,6 +163,7 @@ if __name__ == "__main__":
     parser.add_argument("--num_configs", type=int, help="The number of configurations to generate.", default=1)
     parser.add_argument("--num_activities", type=int, help="The number of activities to include in the generated scenario.", default=5)
     parser.add_argument("--required_activities", help="The activities that must be included in the generated scenario.", nargs="*", default=[])
+    parser.add_argument("--benchmark_name", type=str, help="The name of the benchmark to run.", default="")
     parser.add_argument("--save_image", action="store_true", help="Save the generated image.", default=True)
     parser.add_argument("--save_prefix", action="store_true", help="Save the generated image with a prefix.", default=True)
     parser.add_argument("--llm_base_url", type=str, help="The base URL for the LLM API.")
@@ -279,7 +280,7 @@ if __name__ == "__main__":
             if args.save_prefix:
                 activity_indices = [all_activities.index(activity["type"]) for activity in config["activities"]]
                 folder = "".join([str(index) for index in activity_indices]) + f"_{folder}"
-            folder = os.path.join(os.path.dirname(__file__), "data/results", os.environ["LLM_MODEL"], folder)
+            folder = os.path.join(os.path.dirname(__file__), "data/results", os.environ["LLM_MODEL"], args.benchmark_name, folder)
 
             if not os.path.exists(folder):
                 os.makedirs(folder)
