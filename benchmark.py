@@ -12,6 +12,7 @@ folder = os.path.dirname(__file__)
 sys.path.append(os.path.join(folder, "lctgen"))
 
 import matplotlib.pyplot as plt
+import matplotlib.patheffects as patheffects
 import numpy as np
 import torch
 
@@ -24,8 +25,9 @@ from trajdata.maps.vec_map_elements import RoadLane, Polyline
 from trafficgen.utils.typedef import *
 from lctgen.config.default import get_config
 from lctgen.datasets.utils import fc_collate_fn
-from lctgen.inference.utils import output_formating_cot, vis_decode
+from lctgen.inference.utils import output_formating_cot
 from lctgen.models import LCTGen
+from lctgen.models.utils import draw_seq
 
 from benchmark.lateral import is_turning_left, is_turning_right
 from benchmark.longitudinal import is_accelerating, is_cruising, is_decelerating, is_standing_still
@@ -101,7 +103,7 @@ def add_test_results(config: dict, trajectories: np.ndarray):
         if action not in test_map: continue
 
         try:
-            print(f"Running test for activity: {action}", indices)
+            print(f"Running test for activity: {action}", [f"V{index + 1}" for index in indices])
             print([test_map[action](vector_map, StateArray.from_array(trajectories[index], "x,y")) for index in indices])
             states = [StateArray.from_array(trajectories[index], "x,y") for index in indices]
             config["activities"][i]["results"] = [bool(test_map[action](vector_map, state)) for state in states]
@@ -113,6 +115,24 @@ def add_test_results(config: dict, trajectories: np.ndarray):
             config["activities"][i]["has_continuous_path"] = [None] * len(indices)
 
     return config
+
+def visualize_input_seq(data, agents, traj, clip_size=True):
+    MIN_LENGTH = 4.0
+    MIN_WIDTH = 1.5
+
+    center = data["center"][0].cpu().numpy()
+    rest = data["rest"][0].cpu().numpy()
+    bound = data["bound"][0].cpu().numpy()
+
+    if clip_size:
+        for i in range(len(agents)):
+            agents[i].length_width = np.clip(agents[i].length_width, [MIN_LENGTH, MIN_WIDTH], [10.0, 5.0])
+
+    plot = draw_seq(center, agents, traj=traj, other=rest, edge=bound, save_np=False)
+    for i, agent in enumerate(agents):
+        plot.text(*agent.position[0], f"V{i + 1}", fontsize=10, color="black", zorder=100000, path_effects=[patheffects.withStroke(linewidth=5, foreground="white")])
+
+    return plot
 
 def generate_scenario(model, llm, config, batch):
     # format LLM output to Structured Representation (agent and map vectors)
@@ -278,16 +298,15 @@ if __name__ == "__main__":
                 plt.close()
 
             batch = fc_collate_fn(batch)
-            scenario = generate_scenario(model, llm, config, batch)
-            trajectories = scenario[0]["traj"].swapaxes(0, 1)
+            scenario = generate_scenario(model, llm, config, batch)[0]
+            trajectories = scenario["traj"].swapaxes(0, 1)
             config = add_test_results(config, trajectories)
             config["trajectories"] = trajectories.tolist()
 
             if args.save_image:
-                image = vis_decode(batch, scenario)
-
-                with open(os.path.join(folder, "lctgen-scenario.png"), "wb") as fp:
-                    image.save(fp)
+                plot = visualize_input_seq(batch, agents=scenario["agent"], traj=scenario["traj"])
+                plot.savefig(os.path.join(folder, "lctgen-scenario.png"), bbox_inches="tight", pad_inches=0, dpi=300)
+                plot.close()
 
             with open(os.path.join(folder, "config.yaml"), "w") as fp:
                 yaml.dump(config, fp)
