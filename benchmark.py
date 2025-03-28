@@ -135,14 +135,14 @@ def visualize_input_seq(data, agents, traj, clip_size=True):
 
     return plot
 
-def generate_scenario(model, llm, config, batch):
+def generate_scenario(model, llm, config, batch, use_structured_output=False):
     # format LLM output to Structured Representation (agent and map vectors)
     MAX_AGENT_NUM = 32
 
     config = describe_for_lctgen(config)
     print(f"Running scenario generation based on text: \"{config['description']}\"")
 
-    llm_text = llm.forward(config["description"])
+    llm_text = llm.forward(config["description"], use_structured_output=use_structured_output)
     agent_vector, map_vector = output_formating_cot(llm_text) if isinstance(llm_text, str) else llm_text
 
     agent_num = len(agent_vector)
@@ -166,6 +166,7 @@ if __name__ == "__main__":
     parser.add_argument("--benchmark_name", type=str, help="The name of the benchmark to run.", default="")
     parser.add_argument("--save_image", action="store_true", help="Save the generated image.", default=True)
     parser.add_argument("--save_prefix", action="store_true", help="Save the generated image with a prefix.", default=True)
+    parser.add_argument("--use_structured_output", action="store_false", help="Use structured output from the LLM.", default=False)
     parser.add_argument("--llm_base_url", type=str, help="The base URL for the LLM API.")
     parser.add_argument("--llm_model", type=str, help="The model to use for the LLM API.")
     parser.add_argument("--llm_api_key", type=str, help="The API key for the LLM API.")
@@ -300,7 +301,7 @@ if __name__ == "__main__":
                 plt.close()
 
             batch = fc_collate_fn(batch)
-            scenario = generate_scenario(model, llm, config, batch)[0]
+            scenario = generate_scenario(model, llm, config, batch, use_structured_output=args.use_structured_output)[0]
             trajectories = scenario["traj"].swapaxes(0, 1)
             config = add_test_results(config, trajectories)
             config["trajectories"] = trajectories.tolist()
