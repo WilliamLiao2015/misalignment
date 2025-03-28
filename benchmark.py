@@ -58,10 +58,14 @@ test_map = {
     "lateral:turning:left": is_turning_left
 }
 
+# 0: Accelerating, 1: Cruising, 2: Decelerating, 3: Standing Still, 4: Turning Right, 5: Turning Left
+all_activities = ["longitudinal:driving-forward:accelerating", "longitudinal:driving-forward:cruising", "longitudinal:driving-forward:decelerating", "longitudinal:standing-still", "lateral:turning:right", "lateral:turning:left"]
+
 def describe_for_lctgen(config: dict, combine=True) -> Optional[dict]:
     description = ""
 
-    participants_name_map = {participant: f"V{i + 1}" for i, participant in enumerate(set([participant for activity in config["activities"] for participant in activity["participants"]]))}
+    participants = [participant for activity in config["activities"] for participant in activity["participants"]]
+    participants_name_map = {participant: f"V{i + 1}" for i, participant in enumerate(sorted(set(participants), key=participants.index))}
 
     if not combine:
         for activity in config["activities"]:
@@ -136,12 +140,13 @@ def generate_scenario(model, llm, config, batch):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Generate a scenario from the given text.")
     parser.add_argument("--num_configs", type=int, help="The number of configurations to generate.", default=1)
+    parser.add_argument("--num_activities", type=int, help="The number of activities to include in the generated scenario.", default=5)
+    parser.add_argument("--required_activities", help="The activities that must be included in the generated scenario.", nargs="*", default=[])
     parser.add_argument("--save_image", action="store_true", help="Save the generated image.", default=True)
+    parser.add_argument("--save_prefix", action="store_true", help="Save the generated image with a prefix.", default=True)
     parser.add_argument("--llm_base_url", type=str, help="The base URL for the LLM API.")
     parser.add_argument("--llm_model", type=str, help="The model to use for the LLM API.")
     parser.add_argument("--llm_api_key", type=str, help="The API key for the LLM API.")
-    parser.add_argument("--required_activities", help="The activities that must be included in the generated scenario.", nargs="*", default=[])
-    parser.add_argument("--num_activities", type=int, help="The number of activities to include in the generated scenario.", default=5)
     args = parser.parse_args()
 
     try:
@@ -230,7 +235,13 @@ if __name__ == "__main__":
                 for activity_type in args.required_activities:
                     for activity in activities:
                         existing_participants = set([participant for activity in config["activities"] for participant in activity["participants"]])
-                        if activity_type in activity["type"] and len(set(activity["participants"]).intersection(existing_participants)) == 0:
+                        if len(set(activity["participants"]).intersection(existing_participants)) > 0: continue
+
+                        # Try to convert the activity type to string if it is an integer
+                        try: activity_type = all_activities[int(activity_type)]
+                        except: pass
+
+                        if activity_type in activity["type"]:
                             config["activities"].append(activity)
                             break
                 if len(config["activities"]) < len(args.required_activities):
@@ -243,8 +254,11 @@ if __name__ == "__main__":
                 config["activities"].append(random.choice(candidates))
             # print(config["activities"])
 
-            time_str = time.strftime("%Y-%m-%d_%H-%M-%S")
-            folder = os.path.join(os.path.dirname(__file__), "data/results", os.environ["LLM_MODEL"], f"{time_str}")
+            folder = time.strftime("%Y-%m-%d_%H-%M-%S")
+            if args.save_prefix:
+                activity_indices = [all_activities.index(activity["type"]) for activity in config["activities"]]
+                folder = "".join([str(index) for index in activity_indices]) + f"_{folder}"
+            folder = os.path.join(os.path.dirname(__file__), "data/results", os.environ["LLM_MODEL"], folder)
 
             if not os.path.exists(folder):
                 os.makedirs(folder)
