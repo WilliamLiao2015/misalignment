@@ -104,9 +104,10 @@ def add_test_results(config: dict, trajectories: np.ndarray):
 
         try:
             print(f"Running test for activity: {action}", [f"V{index + 1}" for index in indices])
-            print([test_map[action](vector_map, StateArray.from_array(trajectories[index], "x,y")) for index in indices])
             states = [StateArray.from_array(trajectories[index], "x,y") for index in indices]
-            config["activities"][i]["results"] = [bool(test_map[action](vector_map, state)) for state in states]
+            results = [test_map[action](vector_map, state) for state in states]
+            print(f"Results: {results}")
+            config["activities"][i]["results"] = [bool(result) for result in results]
             config["activities"][i]["offroad_ratios"] = [get_offroad_ratios(vector_map, state) for state in states]
             config["activities"][i]["has_continuous_path"] = [has_continuous_path(vector_map, state) for state in states]
         except:
