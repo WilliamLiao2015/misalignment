@@ -8,16 +8,17 @@ import time
 def run_benchmark(activity):
     """Run benchmark.py with the given permutation as required_activities."""
     required_activities = " ".join(map(str, activity))
-    command = f"python benchmark.py --num_configs 1 --required_activities {required_activities} --num_activities {len(activity)} --benchmark_name {len(activity)}_activities"
+    command = f"python benchmark.py --num_configs 1 --required_activities {required_activities} --num_activities {len(activity)} --benchmark_name {len(activity)}_activities{'_so' if args.use_structured_output else ''}{' --use_structured_output' if args.use_structured_output else ''}"
     print(f"Running: {command}")
 
     with open(os.path.join(folder, "benchmark.log"), "a") as log_file:
         result = subprocess.run(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        log_file.write(f"Command: {command}\nstdout:\n{result.stdout.decode()}\n\n")
+        log_file.write(f"Command: {command}\nstdout:\n{result.stdout.decode()}\nstderr:\n{result.stderr.decode()}\n\n")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run benchmarks for the scenario generation methods.")
     parser.add_argument("--num_activities", type=int, help="The number of activities to include in the benchmark.", default=3)
+    parser.add_argument("--use_structured_output", action="store_true", help="Use structured output for the LLM.", default=False)
     args = parser.parse_args()
 
     folder = os.path.join(os.path.dirname(__file__), "data/results")
@@ -34,7 +35,7 @@ if __name__ == "__main__":
     start = time.time()
 
     # Create a pool of worker processes
-    with multiprocessing.Pool(processes=12) as pool:
+    with multiprocessing.Pool(processes=1) as pool:
         pool.map(run_benchmark, activities)
 
     end = time.time()
