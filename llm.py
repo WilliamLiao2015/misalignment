@@ -56,7 +56,7 @@ class LCTGenBaseLLM(BasicLLM):
     def llm_query(self, extended_prompt):
         if self.codex_cfg.MODEL == "debug":
             resp = self.sys_prompt
-        elif self.model.startswith("gpt-"):
+        elif not self.use_structured_output:
             responses = self.client.chat.completions.create(
                 model=self.model,
                 messages=[
@@ -67,7 +67,7 @@ class LCTGenBaseLLM(BasicLLM):
                 max_tokens=self.codex_cfg.MAX_TOKENS,
                 top_p = 1.,
                 frequency_penalty=0,
-                presence_penalty=0,
+                presence_penalty=0
             )
             resp = responses.choices[0].message.content
         # elif self.model.startswith("qwq-"):
@@ -88,8 +88,12 @@ class LCTGenBaseLLM(BasicLLM):
                     {"role": "system", "content": self.sys_prompt},
                     {"role": "user", "content": extended_prompt}
                 ],
-                max_tokens=-1,
-                **({"response_format": LCTGenStructuredRepresentation} if self.use_structured_output else {})
+                temperature=self.codex_cfg.TEMPERATURE,
+                max_tokens=self.codex_cfg.MAX_TOKENS,
+                top_p = 1.,
+                frequency_penalty=0,
+                presence_penalty=0,
+                response_format=LCTGenStructuredRepresentation
             )
             representation = responses.choices[0].message.parsed
             agents = [[agent.position_negative_for_ego, agent.distance_from_ego, agent.direction_wrt_ego, agent.speed_interval, *agent.action_in_next_4s] for agent in representation.agents]
