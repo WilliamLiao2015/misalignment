@@ -277,6 +277,18 @@ if __name__ == "__main__":
                 config["activities"].append(random.choice(candidates))
             # print(config["activities"])
 
+            batch = fc_collate_fn(batch)
+
+            try: scenario = generate_scenario(model, llm, config, batch)[0]
+            except:
+                time.sleep(1)
+                print("Failed to generate scenario, retrying...")
+                continue
+
+            trajectories = scenario["traj"].swapaxes(0, 1)
+            config = add_test_results(config, trajectories)
+            config["trajectories"] = trajectories.tolist()
+
             folder = time.strftime("%Y-%m-%d_%H-%M-%S")
             if args.save_prefix:
                 activity_indices = [all_activities.index(activity["type"]) for activity in config["activities"]]
@@ -299,12 +311,6 @@ if __name__ == "__main__":
                 plt.ylim(-60, 60)
                 plt.savefig(os.path.join(folder, "original-scenario.png"), bbox_inches="tight", pad_inches=0, dpi=300)
                 plt.close()
-
-            batch = fc_collate_fn(batch)
-            scenario = generate_scenario(model, llm, config, batch)[0]
-            trajectories = scenario["traj"].swapaxes(0, 1)
-            config = add_test_results(config, trajectories)
-            config["trajectories"] = trajectories.tolist()
 
             if args.save_image:
                 plot = visualize_input_seq(batch, agents=scenario["agent"], traj=scenario["traj"])
